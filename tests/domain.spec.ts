@@ -72,13 +72,13 @@ describe('打印数量校验', () => {
 });
 
 describe('尺寸与样式默认值', () => {
-  it('提供可编辑的大、小唛头预设和居中自动字号样式', () => {
+  it('提供可编辑的大、小唛头预设和可直接调整的固定字号样式', () => {
     expect(defaultSizePresets.map(({ id, widthMm, heightMm }) => ({ id, widthMm, heightMm }))).toEqual([
       { id: 'large', widthMm: 100, heightMm: 60 },
       { id: 'small', widthMm: 70, heightMm: 45 },
     ]);
     expect(defaultStyle).toMatchObject({
-      fontMode: 'auto',
+      fontMode: 'fixed',
       horizontalAlign: 'center',
       verticalAlign: 'middle',
       fontWeight: 700,
@@ -100,13 +100,14 @@ describe('唛头排版', () => {
     expect(getPreviewScale(260, 130)).toBeCloseTo(0.5292, 3);
   });
 
-  it('移动文字只改变位置校验，不改变自动字号', () => {
+  it('移动文字只改变位置校验，不改变用户设置的字号', () => {
     const label = createLabel({
       content: 'FYF-TTT0103',
       quantity: 1,
       source: 'manual',
       needsReview: false,
     });
+    label.style.fontSizePt = 32;
     const preset = { ...defaultSizePresets[0], widthMm: 130, heightMm: 70, maxFontSize: 56, minFontSize: 8 };
     const centered = solveLabelTextLayout(label, preset);
 
@@ -118,8 +119,8 @@ describe('唛头排版', () => {
     };
     const moved = solveLabelTextLayout(label, preset);
 
-    expect(centered).toEqual({ ok: true, fontSize: 50, lines: ['FYF-TTT0103'] });
-    expect(moved).toEqual({ ok: false, error: '文字位置超出唛头范围', fontSize: 50 });
+    expect(centered).toEqual({ ok: true, fontSize: 32, lines: ['FYF-TTT0103'] });
+    expect(moved).toEqual({ ok: false, error: '文字位置超出唛头范围', fontSize: 32 });
   });
 
   it('自动适配忽略不产生打印内容的空行', () => {

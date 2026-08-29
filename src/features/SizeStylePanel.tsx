@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { validateSizePreset, type LabelRecord, type LabelStyle, type LabelTextLine, type SizePreset } from '../domain/labels';
 import { describePlacement, resolvePrintArea } from '../domain/placement';
 import { buildAllTextStylePatch, type AllTextStylePatch } from '../domain/richText';
+import { alignTextLines, type TextLineAlignment } from '../domain/textLines';
 
 interface SizeStylePanelProps {
   label: LabelRecord;
@@ -16,6 +18,7 @@ interface SizeStylePanelProps {
 }
 
 export default function SizeStylePanel({ label, presets, onChange, onPresetChange, onCreatePreset, recentSizes, onUseRecent, onRememberSize, activeLine, onLineChange }: SizeStylePanelProps) {
+  const [autoAlignment, setAutoAlignment] = useState<TextLineAlignment>('center');
   const patchStyle = (patch: Partial<LabelStyle>) => onChange({ style: { ...label.style, ...patch } });
   const patchAllTextStyle = (patch: AllTextStylePatch) => onChange(buildAllTextStylePatch(label, patch));
   const activePreset = presets.find((preset) => preset.id === label.sizePresetId) ?? presets[0];
@@ -46,17 +49,12 @@ export default function SizeStylePanel({ label, presets, onChange, onPresetChang
             <option value={'"Times New Roman", serif'}>Times New Roman</option>
             <option value={'Consolas, monospace'}>等宽字体</option>
           </select></label>
-          <label className="field"><span>字号模式</span><select value={label.style.fontMode} onChange={(event) => {
-            const fontMode = event.target.value as LabelStyle['fontMode'];
-            patchAllTextStyle(fontMode === 'fixed' ? { fontMode, fontSizePt: label.style.fontSizePt } : { fontMode });
-          }}><option value="auto">自动适配</option><option value="fixed">固定字号</option></select></label>
           <label className="field"><span>全部字号（pt）</span><input
             type="number"
             min="8"
             max="120"
-            disabled={label.style.fontMode === 'auto'}
             value={label.style.fontSizePt}
-            onChange={(event) => patchAllTextStyle({ fontSizePt: Number(event.target.value) })}
+            onChange={(event) => patchAllTextStyle({ fontMode: 'fixed', fontSizePt: Number(event.target.value) })}
           /></label>
           <label className="field"><span>行距</span><select value={label.style.lineHeight} onChange={(event) => patchStyle({ lineHeight: Number(event.target.value) as LabelStyle['lineHeight'] })}>
             <option value="1.05">紧凑</option>
@@ -70,6 +68,17 @@ export default function SizeStylePanel({ label, presets, onChange, onPresetChang
           <label><input type="checkbox" checked={label.style.italic} onChange={(event) => patchAllTextStyle({ italic: event.target.checked })} />斜体</label>
           <label><input type="checkbox" checked={label.style.underline} onChange={(event) => patchAllTextStyle({ underline: event.target.checked })} />下划线</label>
         </fieldset>
+        <div className="auto-layout-controls">
+          <label className="field"><span>自动排列方式</span><select value={autoAlignment} onChange={(event) => setAutoAlignment(event.target.value as TextLineAlignment)}>
+            <option value="center">水平居中</option>
+            <option value="left">左对齐</option>
+            <option value="right">右对齐</option>
+            <option value="keep">保持当前左右位置</option>
+          </select></label>
+          <button className="button button-primary" type="button" onClick={() => onChange({ textLines: alignTextLines(label.textLines, autoAlignment) })}>
+            全部自动排列
+          </button>
+        </div>
       </section>
       <details className="advanced-settings">
         <summary><span>尺寸与打印区域</span><strong>{activePreset.widthMm} × {activePreset.heightMm} mm</strong></summary>

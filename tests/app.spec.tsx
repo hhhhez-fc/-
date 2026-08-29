@@ -105,7 +105,7 @@ describe('打印检查', () => {
 
   it('实际打印使用预览中设置的毫米打印区域', () => {
     const label = {
-      ...createLabel({ content: 'FYF-TTT0103', quantity: 1, source: 'manual', needsReview: false }),
+      ...createLabel({ content: 'FY', quantity: 1, source: 'manual', needsReview: false }),
       printArea: { leftMm: 10, topMm: 5, widthMm: 40, heightMm: 20 },
     };
     const group = createPrintPlan([label,], defaultSizePresets).groups[0];
@@ -150,6 +150,8 @@ describe('逐行预览', () => {
     expect(html.match(/拖动第 \d 行/g)).toHaveLength(2);
     expect(html).toContain('aria-pressed="true"');
     expect(html.match(/white-space:nowrap/g)).toHaveLength(2);
+    expect(html.match(/调整第 1 行文字大小/g)).toHaveLength(4);
+    expect(html).toContain('text-line-frame is-active-line');
   });
 
   it('文字行重叠时保持内容适配字号并显示位置错误', () => {
@@ -159,6 +161,7 @@ describe('逐行预览', () => {
       source: 'image',
       needsReview: true,
     });
+    label.style.fontSizePt = 12;
     const preset = defaultSizePresets.find((item) => item.id === 'small')!;
     const html = renderToStaticMarkup(<LabelPreview
       label={label}
@@ -188,7 +191,7 @@ describe('逐行预览', () => {
 });
 
 describe('右侧样式设置', () => {
-  it('提供全部文字字体、字号和强调设置，并把低频尺寸设置折叠', () => {
+  it('提供直接的全部文字字号、排列方式和强调设置，并把低频尺寸设置折叠', () => {
     const label = createLabel({ content: 'FYF-TTT0103\n4576', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<SizeStylePanel
       label={label}
@@ -205,7 +208,11 @@ describe('右侧样式设置', () => {
 
     expect(html).toContain('全部文字样式');
     expect(html).toContain('<span>全部字体</span>');
-    expect(html).toContain('<span>字号模式</span>');
+    expect(html).toContain('<span>全部字号（pt）</span>');
+    expect(html).not.toContain('字号模式');
+    expect(html).toContain('<span>自动排列方式</span>');
+    expect(html).toContain('保持当前左右位置');
+    expect(html).toContain('全部自动排列');
     expect(html).toContain('<summary>');
     expect(html).toContain('尺寸与打印区域');
     expect(html).toContain('<span>行距</span>');

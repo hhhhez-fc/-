@@ -28,7 +28,7 @@ function hydrateDraft(parsed: DraftState): DraftState {
       sides: legacy.sides ?? 1,
       sizeType: legacy.sizeType ?? (sizePresetId === 'large' ? 'large' : 'small'),
       sizePresetId,
-      style: { ...defaultStyle, ...legacy.style },
+      style: { ...defaultStyle, ...legacy.style, fontMode: 'fixed' },
       textStyleRanges: Array.isArray(legacy.textStyleRanges)
         ? legacy.textStyleRanges.map((range) => ({ ...range, style: { ...range.style } }))
         : [],

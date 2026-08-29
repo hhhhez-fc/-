@@ -179,4 +179,14 @@ describe('本地草稿存储', () => {
 
     expect(loadDraft(storage)).toMatchObject({ selectedLabelIds: [], business: '' });
   });
+
+  it('读取旧草稿时把隐藏的自动字号迁移为可直接编辑的固定字号', () => {
+    const label = createLabel({ content: 'FYF-TTT0103', quantity: 1, source: 'manual', needsReview: false });
+    label.style.fontMode = 'auto';
+    label.style.fontSizePt = 36;
+    const oldDraft = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    const storage = { getItem: () => JSON.stringify(oldDraft) };
+
+    expect(loadDraft(storage)?.labels[0].style).toMatchObject({ fontMode: 'fixed', fontSizePt: 36 });
+  });
 });

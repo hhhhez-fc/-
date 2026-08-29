@@ -9,6 +9,29 @@ export interface PointerDragStart {
   placement: TextPlacement;
 }
 
+export type TextResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
+
+export interface TextResizeStart {
+  fontSizePt: number;
+  width: number;
+  height: number;
+  handle: TextResizeHandle;
+}
+
+export function resolveTextResizeFontSize(
+  start: TextResizeStart,
+  pointer: { deltaX: number; deltaY: number },
+): number {
+  if (start.width <= 0 || start.height <= 0) return Math.max(8, Math.min(120, start.fontSizePt));
+  const directionX = start.handle.includes('w') ? -1 : 1;
+  const directionY = start.handle.includes('n') ? -1 : 1;
+  const scale = 1 + (
+    (pointer.deltaX * directionX) / start.width
+    + (pointer.deltaY * directionY) / start.height
+  ) / 2;
+  return Math.round(Math.max(8, Math.min(120, start.fontSizePt * scale)) * 2) / 2;
+}
+
 export function resolvePointerDragUpdate(
   start: PointerDragStart,
   current: { clientX: number; clientY: number },

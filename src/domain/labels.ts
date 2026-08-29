@@ -55,8 +55,8 @@ export interface LabelStyle {
 
 export const defaultStyle: LabelStyle = {
   fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
-  fontMode: 'auto',
-  fontSizePt: 32,
+  fontMode: 'fixed',
+  fontSizePt: 26,
   fontWeight: 700,
   italic: false,
   underline: false,

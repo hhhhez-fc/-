@@ -74,9 +74,14 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .app-status { min-width: 10.5rem; color: var(--color-muted); font-size: .75rem; text-align: right; }
 
 .workspace {
-  display: grid; grid-template-columns: minmax(270px,.72fr) minmax(285px,.78fr) minmax(480px,1.5fr);
+  display: grid;
+  grid-template-areas: "intake preview records";
+  grid-template-columns: minmax(220px,.55fr) minmax(540px,1.75fr) minmax(250px,.7fr);
   gap: var(--space-md); align-items: start; padding-top: var(--space-md);
 }
+.intake-panel { grid-area: intake; }
+.records-panel { grid-area: records; }
+.preview-panel { grid-area: preview; }
 .panel { min-width: 0; overflow: clip; background: rgba(255,253,247,.93); border: 1px solid var(--color-line); border-radius: var(--radius-lg); }
 .panel-heading {
   display: flex; gap: .75rem; align-items: flex-start; padding: .9rem 1rem; background: #f5f5ef; border-bottom: 1px solid var(--color-line);
@@ -245,11 +250,11 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .line-orientation { max-width: 12rem; }
 
 .preview-stage {
-  position: relative; display: grid; place-items: center; min-height: clamp(32rem,60vh,46rem); padding: 3.3rem 2.2rem 3.7rem 3.2rem;
+  position: relative; display: grid; place-items: center; min-height: clamp(38rem,72vh,54rem); padding: 3.3rem 2rem 3.7rem 3.2rem;
   overflow: auto; color: var(--color-ink); background: #59605b; scrollbar-gutter: stable;
 }
 .label-paper {
-  position: relative; width: min(100%,46rem); min-width: 12rem; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere;
+  position: relative; width: min(100%,54rem); min-width: 12rem; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere;
   color: #000; background: #fff; border: solid #000; border-width: 0; box-shadow: 0 14px 28px rgba(0,0,0,.26);
 }
 .label-paper.has-overflow { outline: 4px solid var(--color-signal); outline-offset: 4px; }
@@ -276,12 +281,21 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .handle-s { bottom: 0; left: 50%; cursor: ns-resize; transform: translate(-50%,50%); }
 .handle-sw { bottom: 0; left: 0; cursor: nesw-resize; transform: translate(-50%,50%); }
 .handle-w { top: 50%; left: 0; cursor: ew-resize; transform: translate(-50%,-50%); }
-.draggable-text, .print-positioned-text { position: absolute; display: block; max-width: 100%; max-height: 100%; margin: 0; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.draggable-text { color: inherit; background: transparent; border: 0; cursor: grab; touch-action: none; }
+.print-positioned-text { position: absolute; display: block; max-width: 100%; max-height: 100%; margin: 0; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.text-line-frame { position: absolute; z-index: 1; display: block; max-width: 100%; max-height: 100%; outline: 1px dashed rgba(11,101,194,.72); outline-offset: .18rem; }
+.text-line-frame:hover { outline-style: solid; }
+.text-line-frame.is-active-line { z-index: 2; outline: 2px solid var(--color-focus); outline-offset: .24rem; }
+.text-line-frame.is-editing-line { z-index: 3; outline: 0; }
+.draggable-text { position: relative; display: block; max-width: 100%; max-height: 100%; margin: 0; padding: 0; color: inherit; background: transparent; border: 0; cursor: grab; touch-action: none; white-space: pre-wrap; overflow-wrap: anywhere; }
 .draggable-text.is-dragging { cursor: grabbing; }
 .draggable-line { z-index: 1; }
-.draggable-line:hover { outline: 1px dashed var(--color-focus); outline-offset: .18rem; }
-.draggable-line.is-active-line { z-index: 2; outline: 2px solid var(--color-focus); outline-offset: .22rem; }
+.text-resize-handle { position: absolute; z-index: 4; width: .85rem; height: .85rem; padding: 0; background: #fff; border: 2px solid var(--color-focus); border-radius: 1px; touch-action: none; }
+.text-resize-handle:hover { background: #dcecff; }
+.text-resize-handle:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 4px var(--color-focus); }
+.text-handle-nw { top: 0; left: 0; cursor: nwse-resize; transform: translate(-70%,-70%); }
+.text-handle-ne { top: 0; right: 0; cursor: nesw-resize; transform: translate(70%,-70%); }
+.text-handle-se { right: 0; bottom: 0; cursor: nwse-resize; transform: translate(70%,70%); }
+.text-handle-sw { bottom: 0; left: 0; cursor: nesw-resize; transform: translate(-70%,70%); }
 .direct-text-input {
   z-index: 3; min-width: 1ch; width: auto; color: inherit; background: transparent; border: 0; border-radius: 0;
   outline: 0; box-shadow: none; cursor: text; touch-action: auto; appearance: none; font: inherit; line-height: inherit;
@@ -314,8 +328,9 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .all-text-style-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; margin-bottom: .65rem; }
 .all-text-style-heading strong { font-size: .76rem; }
 .all-text-style-heading span { color: var(--color-muted); font-size: .64rem; text-align: right; }
-.all-text-style-fields { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem; }
+.all-text-style-fields { grid-template-columns: repeat(3,minmax(0,1fr)); gap: .6rem; }
 .all-text-toggles { margin-top: .65rem; background: var(--color-paper); }
+.auto-layout-controls { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .65rem; align-items: end; margin-top: .65rem; }
 .advanced-settings { margin-top: .75rem; border: 1px solid #b8bdb9; background: var(--color-paper); }
 .advanced-settings summary {
   display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 2.75rem; padding: .55rem .7rem;
@@ -389,21 +404,23 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .print-root { display: none; }
 
 @media (max-width: 1120px) {
-  .workspace { grid-template-columns: 1fr 1.25fr; }
-  .preview-panel { grid-column: 1/-1; }
+  .workspace {
+    grid-template-areas: "intake records" "preview preview";
+    grid-template-columns: 1fr 1.25fr;
+  }
 }
 @media (max-width: 720px) {
   .app-shell { padding: .75rem; }
   .app-header, .header-actions { align-items: stretch; flex-direction: column; }
   .app-status { min-width: 0; text-align: left; }
-  .workspace { grid-template-columns: minmax(0,1fr); }
-  .preview-panel { grid-column: auto; }
+  .workspace { grid-template-areas: "intake" "records" "preview"; grid-template-columns: minmax(0,1fr); }
   .two-columns { grid-template-columns: minmax(0,1fr); }
   .three-columns { grid-template-columns: minmax(0,1fr); }
   .four-columns { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .print-area-editor-heading { align-items: stretch; flex-direction: column; }
   .all-text-style-fields { grid-template-columns: minmax(0,1fr); }
   .all-text-style-heading { align-items: flex-start; flex-direction: column; }
+  .auto-layout-controls { grid-template-columns: minmax(0,1fr); }
   .advanced-settings summary { align-items: flex-start; flex-wrap: wrap; }
   .preview-stage { min-height: 24rem; padding-right: 1.4rem; padding-left: 2.4rem; }
   .ruler-horizontal { left: 2.4rem; right: 1.4rem; }

@@ -1,7 +1,12 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { getPreviewScale, MM_TO_PX, solveLabelTextLayout } from '../domain/layout';
 import { describePlacement, movePrintArea, resizePrintArea, resolvePrintArea, type PrintAreaResizeHandle } from '../domain/placement';
-import { resolvePointerDragUpdate, type PointerDragStart } from '../domain/pointerDrag';
+import {
+  resolvePointerDragUpdate,
+  resolveTextResizeFontSize,
+  type PointerDragStart,
+  type TextResizeHandle,
+} from '../domain/pointerDrag';
 import { contentWithUpdatedTextLine, updateTextLine } from '../domain/textLines';
 import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset, TextPlacement } from '../domain/labels';
 import { StyledTextLine } from './StyledText';
@@ -28,6 +33,16 @@ interface PrintAreaDragStart {
   handle?: PrintAreaResizeHandle;
 }
 
+interface TextResizeStart {
+  clientX: number;
+  clientY: number;
+  fontSizePt: number;
+  width: number;
+  height: number;
+  lineId: string;
+  handle: TextResizeHandle;
+}
+
 const resizeHandles: Array<{ id: PrintAreaResizeHandle; label: string }> = [
   { id: 'nw', label: '从左上调整打印区域' },
   { id: 'n', label: '从顶部调整打印区域' },
@@ -39,10 +54,13 @@ const resizeHandles: Array<{ id: PrintAreaResizeHandle; label: string }> = [
   { id: 'w', label: '从左侧调整打印区域' },
 ];
 
+const textResizeHandles: TextResizeHandle[] = ['nw', 'ne', 'se', 'sw'];
+
 export default function LabelPreview({ label, preset, activeLineId, onActiveLineChange, onChange }: LabelPreviewProps) {
   const paperRef = useRef<HTMLDivElement>(null);
   const contentLayerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<(PointerDragStart & { lineId: string }) | null>(null);
+  const textResizeRef = useRef<TextResizeStart | null>(null);
   const printAreaDragRef = useRef<PrintAreaDragStart | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const editStartRef = useRef<{ lineId: string; text: string } | null>(null);
@@ -150,6 +168,32 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
       verticalSnap: delta[1] ? 'free' : line.placement.verticalSnap,
     } });
   };
+  const resizeTextFromPointer = (line: LabelTextLine, event: PointerEvent<HTMLSpanElement>) => {
+    const start = textResizeRef.current;
+    if (!start || start.lineId !== line.id) return;
+    event.stopPropagation();
+    const nextFontSize = resolveTextResizeFontSize(start, {
+      deltaX: event.clientX - start.clientX,
+      deltaY: event.clientY - start.clientY,
+    });
+    patchLine(line, { style: { ...line.style, fontSizePt: nextFontSize } });
+  };
+  const finishTextResize = (event: PointerEvent<HTMLSpanElement>) => {
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    textResizeRef.current = null;
+  };
+  const resizeTextWithKeyboard = (line: LabelTextLine, event: KeyboardEvent<HTMLSpanElement>) => {
+    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight'
+      ? 1
+      : event.key === 'ArrowDown' || event.key === 'ArrowLeft' ? -1 : 0;
+    if (!direction) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const amount = event.shiftKey ? 5 : 1;
+    const current = line.style.fontSizePt ?? fontSize;
+    patchLine(line, { style: { ...line.style, fontSizePt: Math.max(8, Math.min(120, current + direction * amount)) } });
+  };
   const startEditing = (line: LabelTextLine) => {
     onActiveLineChange(line.id);
     editStartRef.current = { lineId: line.id, text: line.text };
@@ -206,9 +250,12 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
         {label.contentType === 'image' && label.imageFallback ? <img src={label.imageFallback} alt="待打印唛头" /> :
           label.textLines.map((line, index) => {
             const isActive = line.id === activeLine?.id;
-            const textStyle: CSSProperties = {
+            const frameStyle: CSSProperties = {
               left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
-              transform: placementTransform(line.placement), textAlign: label.style.horizontalAlign,
+              transform: placementTransform(line.placement),
+            };
+            const textStyle: CSSProperties = {
+              textAlign: label.style.horizontalAlign,
               whiteSpace: 'nowrap',
               writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
               fontFamily: line.style.fontFamily,
@@ -218,48 +265,79 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
               textDecoration: line.style.underline ? 'underline' : undefined,
             };
             if (editingLineId === line.id) {
-              return <input
-                key={line.id}
-                ref={editInputRef}
-                className="draggable-text direct-text-input"
-                style={textStyle}
-                type="text"
-                size={Math.max(1, line.text.length)}
-                value={line.text}
-                aria-label={`直接编辑第 ${index + 1} 行内容`}
-                onChange={(event) => onChange({ content: contentWithUpdatedTextLine(label.textLines, line.id, event.target.value) })}
-                onBlur={finishEditing}
-                onKeyDown={(event) => handleEditKeyDown(line, event)}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-              />;
+              return <div key={line.id} className="text-line-frame is-editing-line" style={frameStyle}><input
+                  ref={editInputRef}
+                  className="draggable-text direct-text-input"
+                  style={textStyle}
+                  type="text"
+                  size={Math.max(1, line.text.length)}
+                  value={line.text}
+                  aria-label={`直接编辑第 ${index + 1} 行内容`}
+                  onChange={(event) => onChange({ content: contentWithUpdatedTextLine(label.textLines, line.id, event.target.value) })}
+                  onBlur={finishEditing}
+                  onKeyDown={(event) => handleEditKeyDown(line, event)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                /></div>;
             }
-            return <button type="button" key={line.id}
-              className={`draggable-text draggable-line ${draggingId === line.id ? 'is-dragging' : ''} ${isActive ? 'is-active-line' : ''}`}
-              style={textStyle} aria-pressed={isActive}
-              aria-label={`拖动第 ${index + 1} 行：${line.text || '空行'}，当前位置：${describePlacement(line.placement)}。方向键微调，Shift 加速。`}
-              onClick={() => onActiveLineChange(line.id)}
-              onDoubleClick={() => startEditing(line)}
-              onPointerDown={(event) => {
-                event.stopPropagation();
-                event.currentTarget.setPointerCapture(event.pointerId);
-                onActiveLineChange(line.id);
-                dragStartRef.current = {
-                  lineId: line.id,
-                  clientX: event.clientX,
-                  clientY: event.clientY,
-                  placement: line.placement,
-                };
-              }}
-              onPointerMove={(event) => { if (dragStartRef.current?.lineId === line.id) moveFromPointer(line, event); }}
-              onPointerUp={(event) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-                setDraggingId(null);
-                dragStartRef.current = null;
-              }}
-              onPointerCancel={() => { setDraggingId(null); dragStartRef.current = null; }} onKeyDown={(event) => handleKeyDown(line, event)}>
-              <StyledTextLine label={label} line={line} lineIndex={index} previewScale={previewScale} />
-            </button>;
+            return <div key={line.id} className={`text-line-frame ${isActive ? 'is-active-line' : ''}`} style={frameStyle}>
+              <button type="button"
+                className={`draggable-text draggable-line ${draggingId === line.id ? 'is-dragging' : ''}`}
+                style={textStyle} aria-pressed={isActive}
+                aria-label={`拖动第 ${index + 1} 行：${line.text || '空行'}，当前位置：${describePlacement(line.placement)}。方向键微调，Shift 加速。`}
+                onClick={() => onActiveLineChange(line.id)}
+                onDoubleClick={() => startEditing(line)}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  onActiveLineChange(line.id);
+                  dragStartRef.current = {
+                    lineId: line.id,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                    placement: line.placement,
+                  };
+                }}
+                onPointerMove={(event) => { if (dragStartRef.current?.lineId === line.id) moveFromPointer(line, event); }}
+                onPointerUp={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                  setDraggingId(null);
+                  dragStartRef.current = null;
+                }}
+                onPointerCancel={() => { setDraggingId(null); dragStartRef.current = null; }} onKeyDown={(event) => handleKeyDown(line, event)}>
+                <StyledTextLine label={label} line={line} lineIndex={index} previewScale={previewScale} />
+              </button>
+              {isActive && textResizeHandles.map((handle) => <span
+                role="slider"
+                tabIndex={0}
+                key={handle}
+                className={`text-resize-handle text-handle-${handle}`}
+                aria-label={`从${handle === 'nw' ? '左上' : handle === 'ne' ? '右上' : handle === 'se' ? '右下' : '左下'}调整第 ${index + 1} 行文字大小；方向键调整字号，Shift 加速`}
+                aria-valuemin={8}
+                aria-valuemax={120}
+                aria-valuenow={line.style.fontSizePt ?? fontSize}
+                onKeyDown={(event) => resizeTextWithKeyboard(line, event)}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+                  if (!bounds?.width || !bounds.height) return;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  textResizeRef.current = {
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                    fontSizePt: line.style.fontSizePt ?? fontSize,
+                    width: bounds.width,
+                    height: bounds.height,
+                    lineId: line.id,
+                    handle,
+                  };
+                }}
+                onPointerMove={(event) => resizeTextFromPointer(line, event)}
+                onPointerUp={finishTextResize}
+                onPointerCancel={(event) => { event.stopPropagation(); textResizeRef.current = null; }}
+              />)}
+            </div>;
           })}
         </div>
         {resizeHandles.map((handle) => <button
@@ -287,7 +365,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
       </div>
     </div>
     <div className={`layout-status ${layout && !layout.ok ? 'is-error' : ''}`} role="status">
-      {layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${fontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}
+      {layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? fontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}
     </div>
   </div>;
 }

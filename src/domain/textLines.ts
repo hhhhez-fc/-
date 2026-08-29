@@ -1,5 +1,7 @@
 import type { LabelTextLine, TextPlacement } from './labels';
 
+export type TextLineAlignment = 'left' | 'center' | 'right' | 'keep';
+
 const centeredPlacement: TextPlacement = {
   xPercent: 50,
   yPercent: 50,
@@ -44,6 +46,34 @@ export function updateTextLine(
     placement: patch.placement ? { ...patch.placement } : line.placement,
     style: patch.style ? { ...patch.style } : line.style,
   } : line);
+}
+
+export function alignTextLines(lines: LabelTextLine[], alignment: TextLineAlignment): LabelTextLine[] {
+  const printable = lines.filter((line) => line.text.trim());
+  let printableIndex = 0;
+  return lines.map((line) => {
+    if (!line.text.trim()) return line;
+    const yPercent = printable.length === 1
+      ? 50
+      : Math.round((((printableIndex + 1) * 100) / (printable.length + 1)) * 100) / 100;
+    printableIndex += 1;
+    const horizontal = alignment === 'keep'
+      ? { xPercent: line.placement.xPercent, horizontalSnap: line.placement.horizontalSnap }
+      : alignment === 'left'
+        ? { xPercent: 0, horizontalSnap: 'left' as const }
+        : alignment === 'right'
+          ? { xPercent: 100, horizontalSnap: 'right' as const }
+          : { xPercent: 50, horizontalSnap: 'center' as const };
+    return {
+      ...line,
+      placement: {
+        ...line.placement,
+        ...horizontal,
+        yPercent,
+        verticalSnap: printable.length === 1 ? 'middle' : 'free',
+      },
+    };
+  });
 }
 
 export function contentWithUpdatedTextLine(lines: LabelTextLine[], id: string, text: string): string {
