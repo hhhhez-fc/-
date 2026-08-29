@@ -1,0 +1,27 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["src"],
+  "locale": "zh-CN",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": [
+    "Table Selection",
+    "Select/Listbox",
+    "Form",
+    "Scrollbar",
+    "Toast",
+    "CRUD"
+  ],
+  "ownership": {
+    "Select/Listbox": "native"
+  },
+  "requiredCommands": ["unit", "typecheck", "build"],
+  "commands": {
+    "unit": "npm run test",
+    "typecheck": "npx tsc -b",
+    "build": "npm run build"
+  },
+  "evidence": {
+    "crudFullFlow": "tests/draft.spec.ts",
+    "failurePaths": "tests/printing.spec.ts"
+  }
+}

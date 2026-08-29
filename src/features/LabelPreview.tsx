@@ -1,0 +1,293 @@
+import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { getPreviewScale, MM_TO_PX, solveLabelTextLayout } from '../domain/layout';
+import { describePlacement, movePrintArea, resizePrintArea, resolvePrintArea, type PrintAreaResizeHandle } from '../domain/placement';
+import { resolvePointerDragUpdate, type PointerDragStart } from '../domain/pointerDrag';
+import { contentWithUpdatedTextLine, updateTextLine } from '../domain/textLines';
+import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset, TextPlacement } from '../domain/labels';
+import { StyledTextLine } from './StyledText';
+
+interface LabelPreviewProps {
+  label: LabelRecord;
+  preset: SizePreset;
+  activeLineId: string | null;
+  onActiveLineChange: (id: string) => void;
+  onChange: (patch: Partial<LabelRecord>) => void;
+}
+
+function placementTransform(placement: TextPlacement): string {
+  const x = placement.horizontalSnap === 'left' ? '0%' : placement.horizontalSnap === 'right' ? '-100%' : '-50%';
+  const y = placement.verticalSnap === 'top' ? '0%' : placement.verticalSnap === 'bottom' ? '-100%' : '-50%';
+  return `translate(${x}, ${y})`;
+}
+
+interface PrintAreaDragStart {
+  clientX: number;
+  clientY: number;
+  area: PrintAreaMm;
+  mode: 'move' | 'resize';
+  handle?: PrintAreaResizeHandle;
+}
+
+const resizeHandles: Array<{ id: PrintAreaResizeHandle; label: string }> = [
+  { id: 'nw', label: '从左上调整打印区域' },
+  { id: 'n', label: '从顶部调整打印区域' },
+  { id: 'ne', label: '从右上调整打印区域' },
+  { id: 'e', label: '从右侧调整打印区域' },
+  { id: 'se', label: '从右下调整打印区域' },
+  { id: 's', label: '从底部调整打印区域' },
+  { id: 'sw', label: '从左下调整打印区域' },
+  { id: 'w', label: '从左侧调整打印区域' },
+];
+
+export default function LabelPreview({ label, preset, activeLineId, onActiveLineChange, onChange }: LabelPreviewProps) {
+  const paperRef = useRef<HTMLDivElement>(null);
+  const contentLayerRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<(PointerDragStart & { lineId: string }) | null>(null);
+  const printAreaDragRef = useRef<PrintAreaDragStart | null>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const editStartRef = useRef<{ lineId: string; text: string } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [isAreaDragging, setIsAreaDragging] = useState(false);
+  const [paperWidthPx, setPaperWidthPx] = useState(0);
+  useLayoutEffect(() => {
+    const paper = paperRef.current;
+    if (!paper) return;
+    const updateWidth = () => setPaperWidthPx(paper.getBoundingClientRect().width);
+    updateWidth();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(paper);
+    return () => observer.disconnect();
+  }, [preset.widthMm]);
+  useLayoutEffect(() => {
+    if (!editingLineId) return;
+    editInputRef.current?.focus();
+    editInputRef.current?.select();
+  }, [editingLineId]);
+  const previewScale = paperWidthPx ? getPreviewScale(paperWidthPx, preset.widthMm) : 1;
+  const printArea = resolvePrintArea(label.printArea, preset);
+  const layout = label.contentType === 'text' ? solveLabelTextLayout(label, preset) : null;
+  const fontSize = layout?.fontSize
+    ?? (label.style.fontMode === 'auto' ? preset.minFontSize : label.style.fontSizePt);
+  const paperStyle: CSSProperties = {
+    aspectRatio: `${preset.widthMm} / ${preset.heightMm}`,
+    fontFamily: label.style.fontFamily, fontSize: `${fontSize * (96 / 72) * previewScale}px`, fontWeight: label.style.fontWeight,
+    fontStyle: label.style.italic ? 'italic' : 'normal', textDecoration: label.style.underline ? 'underline' : 'none',
+    lineHeight: label.style.lineHeight,
+    borderWidth: label.style.borderWidthMm ? `${label.style.borderWidthMm * MM_TO_PX * previewScale}px` : undefined,
+  };
+  const patchLine = (line: LabelTextLine, patch: Partial<Omit<LabelTextLine, 'id' | 'text'>>) => {
+    onChange({ textLines: updateTextLine(label.textLines, line.id, patch) });
+  };
+  const updatePrintAreaFromPointer = (event: PointerEvent<HTMLElement>) => {
+    const start = printAreaDragRef.current;
+    const bounds = paperRef.current?.getBoundingClientRect();
+    if (!start || !bounds?.width || !bounds.height) return;
+    const deltaXpx = event.clientX - start.clientX;
+    const deltaYpx = event.clientY - start.clientY;
+    if ((deltaXpx * deltaXpx) + (deltaYpx * deltaYpx) < 16) return;
+    const deltaXmm = (deltaXpx / bounds.width) * preset.widthMm;
+    const deltaYmm = (deltaYpx / bounds.height) * preset.heightMm;
+    const next = start.mode === 'resize' && start.handle
+      ? resizePrintArea(start.area, start.handle, deltaXmm, deltaYmm, preset)
+      : movePrintArea(start.area, deltaXmm, deltaYmm, preset);
+    setIsAreaDragging(true);
+    onChange({ printArea: next });
+  };
+  const finishPrintAreaDrag = (event: PointerEvent<HTMLElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    printAreaDragRef.current = null;
+    setIsAreaDragging(false);
+  };
+  const movePrintAreaWithKeyboard = (event: KeyboardEvent<HTMLElement>) => {
+    const amount = event.shiftKey ? 2 : 0.5;
+    const movement: Record<string, [number, number]> = {
+      ArrowLeft: [-amount, 0], ArrowRight: [amount, 0], ArrowUp: [0, -amount], ArrowDown: [0, amount],
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    onChange({ printArea: movePrintArea(printArea, delta[0], delta[1], preset) });
+  };
+  const resizePrintAreaWithKeyboard = (handle: PrintAreaResizeHandle, event: KeyboardEvent<HTMLButtonElement>) => {
+    const amount = event.shiftKey ? 2 : 0.5;
+    const movement: Record<string, [number, number]> = {
+      ArrowLeft: [-amount, 0], ArrowRight: [amount, 0], ArrowUp: [0, -amount], ArrowDown: [0, amount],
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onChange({ printArea: resizePrintArea(printArea, handle, delta[0], delta[1], preset) });
+  };
+  const expandPrintAreaFromHandle = (handle: PrintAreaResizeHandle) => {
+    const deltaX = handle.includes('w') ? -0.5 : handle.includes('e') ? 0.5 : 0;
+    const deltaY = handle.includes('n') ? -0.5 : handle.includes('s') ? 0.5 : 0;
+    onChange({ printArea: resizePrintArea(printArea, handle, deltaX, deltaY, preset) });
+  };
+  const moveFromPointer = (line: LabelTextLine, event: PointerEvent<HTMLButtonElement>) => {
+    const bounds = contentLayerRef.current?.getBoundingClientRect();
+    const start = dragStartRef.current;
+    if (!bounds || !start || start.lineId !== line.id) return;
+    const placement = resolvePointerDragUpdate(start, event, bounds);
+    if (!placement) return;
+    setDraggingId(line.id);
+    patchLine(line, { placement });
+  };
+  const handleKeyDown = (line: LabelTextLine, event: KeyboardEvent<HTMLButtonElement>) => {
+    const amount = event.shiftKey ? 5 : 1;
+    const movement: Record<string, [number, number]> = {
+      ArrowLeft: [-amount, 0], ArrowRight: [amount, 0], ArrowUp: [0, -amount], ArrowDown: [0, amount],
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    patchLine(line, { placement: {
+      xPercent: Math.max(0, Math.min(100, line.placement.xPercent + delta[0])),
+      yPercent: Math.max(0, Math.min(100, line.placement.yPercent + delta[1])),
+      horizontalSnap: delta[0] ? 'free' : line.placement.horizontalSnap,
+      verticalSnap: delta[1] ? 'free' : line.placement.verticalSnap,
+    } });
+  };
+  const startEditing = (line: LabelTextLine) => {
+    onActiveLineChange(line.id);
+    editStartRef.current = { lineId: line.id, text: line.text };
+    setEditingLineId(line.id);
+  };
+  const finishEditing = () => {
+    editStartRef.current = null;
+    setEditingLineId(null);
+  };
+  const handleEditKeyDown = (line: LabelTextLine, event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      event.currentTarget.blur();
+      return;
+    }
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    const editStart = editStartRef.current;
+    if (editStart?.lineId === line.id) {
+      onChange({ content: contentWithUpdatedTextLine(label.textLines, line.id, editStart.text) });
+    }
+    editStartRef.current = null;
+    setEditingLineId(null);
+  };
+  const activeLine = label.textLines.find((line) => line.id === activeLineId) ?? label.textLines[0];
+  const activeIndex = Math.max(0, label.textLines.findIndex((line) => line.id === activeLine?.id));
+
+  return <div className="preview-stage">
+    <div className="ruler ruler-horizontal"><span>{preset.widthMm} mm</span></div>
+    <div className="ruler ruler-vertical"><span>{preset.heightMm} mm</span></div>
+    <div ref={paperRef} className={`label-paper ${layout && !layout.ok ? 'has-overflow' : ''}`} style={paperStyle} data-testid="label-preview">
+      <div
+        className={`print-area-frame ${isAreaDragging ? 'is-dragging-area' : ''}`}
+        role="group"
+        tabIndex={0}
+        aria-label="拖动内容打印区域；方向键微调，Shift 加速"
+        style={{
+          left: `${printArea.leftMm * MM_TO_PX * previewScale}px`,
+          top: `${printArea.topMm * MM_TO_PX * previewScale}px`,
+          width: `${printArea.widthMm * MM_TO_PX * previewScale}px`,
+          height: `${printArea.heightMm * MM_TO_PX * previewScale}px`,
+        }}
+        onKeyDown={movePrintAreaWithKeyboard}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          printAreaDragRef.current = { clientX: event.clientX, clientY: event.clientY, area: printArea, mode: 'move' };
+        }}
+        onPointerMove={updatePrintAreaFromPointer}
+        onPointerUp={finishPrintAreaDrag}
+        onPointerCancel={() => { printAreaDragRef.current = null; setIsAreaDragging(false); }}
+      >
+        <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }}>
+        {draggingId && <><i className="snap-guide guide-x" /><i className="snap-guide guide-y" /></>}
+        {label.contentType === 'image' && label.imageFallback ? <img src={label.imageFallback} alt="待打印唛头" /> :
+          label.textLines.map((line, index) => {
+            const isActive = line.id === activeLine?.id;
+            const textStyle: CSSProperties = {
+              left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
+              transform: placementTransform(line.placement), textAlign: label.style.horizontalAlign,
+              whiteSpace: 'nowrap',
+              writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
+              fontFamily: line.style.fontFamily,
+              fontSize: line.style.fontSizePt ? `${line.style.fontSizePt * (96 / 72) * previewScale}px` : undefined,
+              fontWeight: line.style.fontWeight,
+              fontStyle: line.style.italic ? 'italic' : undefined,
+              textDecoration: line.style.underline ? 'underline' : undefined,
+            };
+            if (editingLineId === line.id) {
+              return <input
+                key={line.id}
+                ref={editInputRef}
+                className="draggable-text direct-text-input"
+                style={textStyle}
+                type="text"
+                size={Math.max(1, line.text.length)}
+                value={line.text}
+                aria-label={`直接编辑第 ${index + 1} 行内容`}
+                onChange={(event) => onChange({ content: contentWithUpdatedTextLine(label.textLines, line.id, event.target.value) })}
+                onBlur={finishEditing}
+                onKeyDown={(event) => handleEditKeyDown(line, event)}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              />;
+            }
+            return <button type="button" key={line.id}
+              className={`draggable-text draggable-line ${draggingId === line.id ? 'is-dragging' : ''} ${isActive ? 'is-active-line' : ''}`}
+              style={textStyle} aria-pressed={isActive}
+              aria-label={`拖动第 ${index + 1} 行：${line.text || '空行'}，当前位置：${describePlacement(line.placement)}。方向键微调，Shift 加速。`}
+              onClick={() => onActiveLineChange(line.id)}
+              onDoubleClick={() => startEditing(line)}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                onActiveLineChange(line.id);
+                dragStartRef.current = {
+                  lineId: line.id,
+                  clientX: event.clientX,
+                  clientY: event.clientY,
+                  placement: line.placement,
+                };
+              }}
+              onPointerMove={(event) => { if (dragStartRef.current?.lineId === line.id) moveFromPointer(line, event); }}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                setDraggingId(null);
+                dragStartRef.current = null;
+              }}
+              onPointerCancel={() => { setDraggingId(null); dragStartRef.current = null; }} onKeyDown={(event) => handleKeyDown(line, event)}>
+              <StyledTextLine label={label} line={line} lineIndex={index} previewScale={previewScale} />
+            </button>;
+          })}
+        </div>
+        {resizeHandles.map((handle) => <button
+          type="button"
+          key={handle.id}
+          className={`print-area-handle handle-${handle.id}`}
+          aria-label={`${handle.label}，方向键微调，Shift 加速，按 Enter 向外扩展`}
+          onClick={(event) => { event.stopPropagation(); expandPrintAreaFromHandle(handle.id); }}
+          onKeyDown={(event) => resizePrintAreaWithKeyboard(handle.id, event)}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            printAreaDragRef.current = {
+              clientX: event.clientX,
+              clientY: event.clientY,
+              area: printArea,
+              mode: 'resize',
+              handle: handle.id,
+            };
+          }}
+          onPointerMove={(event) => { event.stopPropagation(); updatePrintAreaFromPointer(event); }}
+          onPointerUp={(event) => { event.stopPropagation(); finishPrintAreaDrag(event); }}
+          onPointerCancel={(event) => { event.stopPropagation(); printAreaDragRef.current = null; setIsAreaDragging(false); }}
+        />)}
+      </div>
+    </div>
+    <div className={`layout-status ${layout && !layout.ok ? 'is-error' : ''}`} role="status">
+      {layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${fontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}
+    </div>
+  </div>;
+}
