@@ -1,5 +1,6 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import type { InlineTextStyle, LabelRecord } from '../domain/labels';
+import { MAX_LABEL_QUANTITY } from '../domain/quantity';
 import { applyTextStyleRange } from '../domain/richText';
 import { updateTextLine } from '../domain/textLines';
 
@@ -116,6 +117,7 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
           <input
             type="number"
             min="1"
+            max={MAX_LABEL_QUANTITY}
             step="1"
             inputMode="numeric"
             value={label.quantity}

@@ -1,6 +1,9 @@
 import { getPrintCopies, validateSizePreset, type LabelRecord, type SizePreset } from './labels';
 import { validateLabelForPrint } from './layout';
 
+export const MAX_PRINT_COPIES_PER_LABEL = 1000;
+export const MAX_PRINT_COPIES_TOTAL = 5000;
+
 export interface PrintPage {
   label: LabelRecord;
   preset: SizePreset;
@@ -31,12 +34,20 @@ export interface PrintPlan {
 export function createPrintPlan(labels: LabelRecord[], presets: SizePreset[]): PrintPlan {
   const groupMap = new Map<string, PrintGroup>();
   const blockers: PrintBlocker[] = [];
+  let plannedCopies = 0;
 
   labels.forEach((label, index) => {
     const preset = presets.find((candidate) => candidate.id === label.sizePresetId);
     const reasons = preset
       ? [...validateSizePreset(preset), ...validateLabelForPrint(label, preset)]
       : ['找不到对应的尺寸预设'];
+    const copies = getPrintCopies(label);
+
+    if (Number.isFinite(copies) && copies > MAX_PRINT_COPIES_PER_LABEL) {
+      reasons.push(`单条唛头最多打印 ${MAX_PRINT_COPIES_PER_LABEL} 张`);
+    } else if (reasons.length === 0 && plannedCopies + copies > MAX_PRINT_COPIES_TOTAL) {
+      reasons.push(`本次打印总张数不能超过 ${MAX_PRINT_COPIES_TOTAL} 张`);
+    }
 
     if (reasons.length > 0 || !preset) {
       blockers.push({
@@ -56,9 +67,10 @@ export function createPrintPlan(labels: LabelRecord[], presets: SizePreset[]): P
       heightMm: preset.heightMm,
       pages: [],
     };
-    for (let copyNumber = 1; copyNumber <= getPrintCopies(label); copyNumber += 1) {
+    for (let copyNumber = 1; copyNumber <= copies; copyNumber += 1) {
       group.pages.push({ label, preset, copyNumber });
     }
+    plannedCopies += copies;
     groupMap.set(key, group);
   });
 

@@ -39,4 +39,38 @@ describe('print planning', () => {
     const label2 = createLabel({ content: 'B', quantity: 1, source: 'manual', needsReview: false, sizePresetId: 'large' });
     expect(createPrintPlan([label2], invalid).blockers[0].reasons).toContain('宽度必须在 20–300 mm 之间');
   });
+
+  it('blocks a label before expanding more than 1000 print pages', () => {
+    const label = createLabel({
+      content: 'TOO MANY',
+      quantity: 1001,
+      source: 'manual',
+      needsReview: false,
+      sizePresetId: 'small',
+    });
+
+    const plan = createPrintPlan([label], defaultSizePresets);
+
+    expect(plan.groups).toEqual([]);
+    expect(plan.totalCopies).toBe(0);
+    expect(plan.blockers[0].reasons).toContain('单条唛头最多打印 1000 张');
+  });
+
+  it('never expands more than 5000 print pages for one plan', () => {
+    const labels = Array.from({ length: 6 }, (_, index) =>
+      createLabel({
+        content: `BATCH-${index + 1}`,
+        quantity: 1000,
+        source: 'manual',
+        needsReview: false,
+        sizePresetId: 'small',
+      }),
+    );
+
+    const plan = createPrintPlan(labels, defaultSizePresets);
+
+    expect(plan.totalCopies).toBe(5000);
+    expect(plan.blockers).toHaveLength(1);
+    expect(plan.blockers[0].reasons).toContain('本次打印总张数不能超过 5000 张');
+  });
 });

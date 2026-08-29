@@ -45,6 +45,15 @@ describe('打印数量校验', () => {
     expect(parseQuantity('12')).toEqual({ quantity: 12, needsReview: false });
   });
 
+  it('将超过单条打印上限的数量标记为需要校对', () => {
+    expect(parseQuantity('1001')).toEqual({ quantity: 1, needsReview: true });
+  });
+
+  it('阻止手动输入超过单条上限的基础数量', () => {
+    const label = createLabel({ content: 'A', quantity: 1001, source: 'manual', needsReview: false });
+    expect(validateLabelForPrint(label, defaultSizePresets[1])).toContain('基础数量不能超过 1000');
+  });
+
   it('将基础数量与张贴面数相乘得到最终打印份数', () => {
     const label = createLabel({
       content: 'FY-01',
