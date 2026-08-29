@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLabel, defaultStyle } from '../src/domain/labels';
-import { createInitialDraft, draftReducer } from '../src/domain/draft';
+import { createInitialDraft, draftReducer, type DraftState } from '../src/domain/draft';
 import { loadDraft, saveDraft } from '../src/domain/storage';
 
 describe('草稿状态', () => {
@@ -51,6 +51,23 @@ describe('草稿状态', () => {
     const withPurpose = draftReducer(withBusiness, { type: 'set-purpose', purpose: 'envelope' });
 
     expect(withPurpose).toMatchObject({ business: '义乌铺', purpose: 'envelope' });
+  });
+
+  it('保存面板顺序并限制面板尺寸', () => {
+    const reordered = draftReducer(createInitialDraft(), {
+      type: 'set-panel-order',
+      order: ['history', 'preview', 'intake', 'records'],
+    });
+    const resized = draftReducer(reordered, {
+      type: 'resize-panel',
+      id: 'history',
+      patch: { widthPx: 1000, heightPx: 100 },
+    });
+
+    expect(resized.workspaceLayout).toMatchObject({
+      order: ['history', 'preview', 'intake', 'records'],
+      sizes: { history: { widthPx: 900, heightPx: 320 } },
+    });
   });
 
   it('从列表选择记录时更新当前编辑目标', () => {
@@ -178,6 +195,13 @@ describe('本地草稿存储', () => {
     const storage = { getItem: () => JSON.stringify(oldDraft) };
 
     expect(loadDraft(storage)).toMatchObject({ selectedLabelIds: [], business: '' });
+  });
+
+  it('hydrates an old draft with the default four-panel layout', () => {
+    const legacy = createInitialDraft() as Partial<DraftState>;
+    delete legacy.workspaceLayout;
+    const loaded = loadDraft({ getItem: () => JSON.stringify(legacy) });
+    expect(loaded?.workspaceLayout.order).toEqual(['intake', 'preview', 'records', 'history']);
   });
 
   it('读取旧草稿时把隐藏的自动字号迁移为可直接编辑的固定字号', () => {

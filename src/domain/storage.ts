@@ -1,6 +1,7 @@
 import { createInitialDraft, type DraftState } from './draft';
 import { defaultStyle, type LabelRecord } from './labels';
 import { createTextLines } from './textLines';
+import { hydrateWorkspaceLayout } from './workspaceLayout';
 
 export const DRAFT_STORAGE_KEY = 'label-printing-local:draft:v1';
 
@@ -60,6 +61,7 @@ function hydrateDraft(parsed: DraftState): DraftState {
     activeLabelId: typeof parsed.activeLabelId === 'string' && validIds.has(parsed.activeLabelId)
       ? parsed.activeLabelId
       : labels[0]?.id ?? null,
+    workspaceLayout: hydrateWorkspaceLayout(parsed.workspaceLayout),
   };
 }
 

@@ -9,6 +9,14 @@ import {
 } from './labels';
 import { validateLabelForPrint } from './layout';
 import { syncTextLines } from './textLines';
+import {
+  DEFAULT_WORKSPACE_LAYOUT,
+  hydrateWorkspaceLayout,
+  resizeWorkspacePanel,
+  type WorkspaceLayout,
+  type WorkspacePanelId,
+  type WorkspacePanelSize,
+} from './workspaceLayout';
 
 export interface StylePreset {
   id: string;
@@ -26,6 +34,7 @@ export interface DraftState {
   activeLabelId: string | null;
   selectedLabelIds: string[];
   recentSizes: SizePreset[];
+  workspaceLayout: WorkspaceLayout;
 }
 
 export function createInitialDraft(): DraftState {
@@ -39,6 +48,10 @@ export function createInitialDraft(): DraftState {
     activeLabelId: null,
     selectedLabelIds: [],
     recentSizes: [],
+    workspaceLayout: {
+      order: [...DEFAULT_WORKSPACE_LAYOUT.order],
+      sizes: Object.fromEntries(Object.entries(DEFAULT_WORKSPACE_LAYOUT.sizes).map(([id, size]) => [id, { ...size }])) as WorkspaceLayout['sizes'],
+    },
   };
 }
 
@@ -59,6 +72,8 @@ export type DraftAction =
   | { type: 'update-size-preset'; id: string; patch: Partial<Omit<SizePreset, 'id'>> }
   | { type: 'remove-size-preset'; id: string }
   | { type: 'remember-size'; preset: SizePreset }
+  | { type: 'set-panel-order'; order: WorkspacePanelId[] }
+  | { type: 'resize-panel'; id: WorkspacePanelId; patch: Partial<WorkspacePanelSize> }
   | { type: 'clear-draft' };
 
 export function draftReducer(state: DraftState, action: DraftAction): DraftState {
@@ -192,6 +207,16 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
       ].slice(0, 8);
       return { ...state, recentSizes };
     }
+    case 'set-panel-order':
+      return {
+        ...state,
+        workspaceLayout: hydrateWorkspaceLayout({ ...state.workspaceLayout, order: action.order }),
+      };
+    case 'resize-panel':
+      return {
+        ...state,
+        workspaceLayout: resizeWorkspacePanel(state.workspaceLayout, action.id, action.patch),
+      };
     case 'clear-draft':
       return createInitialDraft();
   }
