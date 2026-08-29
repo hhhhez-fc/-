@@ -1,5 +1,6 @@
 import { validateSizePreset, type LabelRecord, type LabelStyle, type LabelTextLine, type SizePreset } from '../domain/labels';
 import { describePlacement, resolvePrintArea } from '../domain/placement';
+import { buildAllTextStylePatch, type AllTextStylePatch } from '../domain/richText';
 
 interface SizeStylePanelProps {
   label: LabelRecord;
@@ -16,6 +17,7 @@ interface SizeStylePanelProps {
 
 export default function SizeStylePanel({ label, presets, onChange, onPresetChange, onCreatePreset, recentSizes, onUseRecent, onRememberSize, activeLine, onLineChange }: SizeStylePanelProps) {
   const patchStyle = (patch: Partial<LabelStyle>) => onChange({ style: { ...label.style, ...patch } });
+  const patchAllTextStyle = (patch: AllTextStylePatch) => onChange(buildAllTextStylePatch(label, patch));
   const activePreset = presets.find((preset) => preset.id === label.sizePresetId) ?? presets[0];
   const printArea = resolvePrintArea(label.printArea, activePreset);
   const sizeErrors = validateSizePreset(activePreset);
@@ -29,7 +31,49 @@ export default function SizeStylePanel({ label, presets, onChange, onPresetChang
   };
   return (
     <div className="style-panel">
-      <h3>尺寸与文字样式</h3>
+      <h3>文字与尺寸</h3>
+      <section className="all-text-style" aria-labelledby="all-text-style-title">
+        <div className="all-text-style-heading">
+          <strong id="all-text-style-title">全部文字样式</strong>
+          <span>修改后覆盖预览中的全部文字</span>
+        </div>
+        <div className="field-grid all-text-style-fields">
+          <label className="field"><span>全部字体</span><select value={label.style.fontFamily} onChange={(event) => patchAllTextStyle({ fontFamily: event.target.value })}>
+            <option value={'Arial, "Microsoft YaHei", sans-serif'}>黑体 / Arial</option>
+            <option value={'"Microsoft YaHei", sans-serif'}>微软雅黑</option>
+            <option value={'SimSun, serif'}>宋体</option>
+            <option value={'Arial, sans-serif'}>Arial</option>
+            <option value={'"Times New Roman", serif'}>Times New Roman</option>
+            <option value={'Consolas, monospace'}>等宽字体</option>
+          </select></label>
+          <label className="field"><span>字号模式</span><select value={label.style.fontMode} onChange={(event) => {
+            const fontMode = event.target.value as LabelStyle['fontMode'];
+            patchAllTextStyle(fontMode === 'fixed' ? { fontMode, fontSizePt: label.style.fontSizePt } : { fontMode });
+          }}><option value="auto">自动适配</option><option value="fixed">固定字号</option></select></label>
+          <label className="field"><span>全部字号（pt）</span><input
+            type="number"
+            min="8"
+            max="120"
+            disabled={label.style.fontMode === 'auto'}
+            value={label.style.fontSizePt}
+            onChange={(event) => patchAllTextStyle({ fontSizePt: Number(event.target.value) })}
+          /></label>
+          <label className="field"><span>行距</span><select value={label.style.lineHeight} onChange={(event) => patchStyle({ lineHeight: Number(event.target.value) as LabelStyle['lineHeight'] })}>
+            <option value="1.05">紧凑</option>
+            <option value="1.2">标准</option>
+            <option value="1.4">宽松</option>
+          </select></label>
+        </div>
+        <fieldset className="toggle-group all-text-toggles">
+          <legend>全部文字强调</legend>
+          <label><input type="checkbox" checked={label.style.fontWeight === 700} onChange={(event) => patchAllTextStyle({ fontWeight: event.target.checked ? 700 : 400 })} />粗体</label>
+          <label><input type="checkbox" checked={label.style.italic} onChange={(event) => patchAllTextStyle({ italic: event.target.checked })} />斜体</label>
+          <label><input type="checkbox" checked={label.style.underline} onChange={(event) => patchAllTextStyle({ underline: event.target.checked })} />下划线</label>
+        </fieldset>
+      </section>
+      <details className="advanced-settings">
+        <summary><span>尺寸与打印区域</span><strong>{activePreset.widthMm} × {activePreset.heightMm} mm</strong></summary>
+        <div className="advanced-settings-content">
       <div className="recent-sizes">
         <div><strong>常用尺寸</strong><span>{recentSizes.length ? '最近使用，点击套用' : '使用过的尺寸会显示在这里'}</span></div>
         {recentSizes.length > 0 && <div className="recent-size-list">{recentSizes.map((preset) => (
@@ -99,22 +143,8 @@ export default function SizeStylePanel({ label, presets, onChange, onPresetChang
           </label>
         </div>
       </section>
-      <div className="field-grid style-fields">
-        <label className="field">
-          <span>行距</span>
-          <select value={label.style.lineHeight} onChange={(event) => patchStyle({ lineHeight: Number(event.target.value) as LabelStyle['lineHeight'] })}>
-            <option value="1.05">紧凑</option>
-            <option value="1.2">标准</option>
-            <option value="1.4">宽松</option>
-          </select>
-        </label>
-      </div>
-      <fieldset className="toggle-group">
-        <legend>文字强调</legend>
-        <label><input type="checkbox" checked={label.style.fontWeight === 700} onChange={(event) => patchStyle({ fontWeight: event.target.checked ? 700 : 400 })} />粗体</label>
-        <label><input type="checkbox" checked={label.style.italic} onChange={(event) => patchStyle({ italic: event.target.checked })} />斜体</label>
-        <label><input type="checkbox" checked={label.style.underline} onChange={(event) => patchStyle({ underline: event.target.checked })} />下划线</label>
-      </fieldset>
+        </div>
+      </details>
       <div className="placement-control">
         <div><strong>当前行位置</strong><span>{activeLine ? describePlacement(activeLine.placement) : '未选择文字行'}</span></div>
         <button className="button button-quiet button-compact" type="button" disabled={!activeLine} onClick={() => activeLine && onLineChange(activeLine.id, { placement: { xPercent: 50, yPercent: 50, horizontalSnap: 'center', verticalSnap: 'middle' } })}>本行恢复正中</button>

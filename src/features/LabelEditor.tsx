@@ -1,7 +1,7 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import type { InlineTextStyle, LabelRecord } from '../domain/labels';
 import { MAX_LABEL_QUANTITY } from '../domain/quantity';
-import { applyTextStyleRange } from '../domain/richText';
+import { buildImmediateTextStylePatch } from '../domain/richText';
 import { updateTextLine } from '../domain/textLines';
 
 interface LabelEditorProps {
@@ -36,19 +36,30 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
       italic: activeLine?.style.italic,
       underline: activeLine?.style.underline,
     });
-  }, [activeLine?.id]);
+  }, [
+    activeLine?.id,
+    activeLine?.style.fontFamily,
+    activeLine?.style.fontSizePt,
+    activeLine?.style.fontWeight,
+    activeLine?.style.italic,
+    activeLine?.style.underline,
+    label.style.fontFamily,
+    label.style.fontSizePt,
+    label.style.fontWeight,
+    label.style.italic,
+    label.style.underline,
+  ]);
   const captureSelection = (event: SyntheticEvent<HTMLTextAreaElement>) => {
     setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd });
     const lineIndex = event.currentTarget.value.slice(0, event.currentTarget.selectionStart).split('\n').length - 1;
     const line = label.textLines[lineIndex];
     if (line) onActiveLineChange(line.id);
   };
-  const applyPartialStyle = () => {
-    if (selectedCount) {
-      onChange({ textStyleRanges: applyTextStyleRange(label.textStyleRanges, selection.start, selection.end, partialStyle) });
-      return;
-    }
-    if (activeLine) onChange({ textLines: updateTextLine(label.textLines, activeLine.id, { style: { ...activeLine.style, ...partialStyle } }) });
+  const updatePartialStyle = (patch: InlineTextStyle) => {
+    if (!activeLine) return;
+    const next = { ...partialStyle, ...patch };
+    setPartialStyle(next);
+    onChange(buildImmediateTextStylePatch(label, activeLine.id, selection, next));
   };
   return (
     <form className="label-editor" noValidate onSubmit={(event) => event.preventDefault()}>
@@ -85,9 +96,9 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
       </div>
       <fieldset className="partial-style-editor">
         <legend>第 {activeLineIndex + 1} 行 / 选中文字样式</legend>
-        <p>{selectedCount ? `已选择 ${selectedCount} 个字符，将只修改选区` : `未选择字符，将修改第 ${activeLineIndex + 1} 行整体`}</p>
+        <p>{selectedCount ? `已选择 ${selectedCount} 个字符，修改后立即生效` : `未选择字符，将修改第 ${activeLineIndex + 1} 行整体；修改后立即生效`}</p>
         <div className="partial-style-controls">
-          <label className="field"><span>字体</span><select value={partialStyle.fontFamily} onChange={(event) => setPartialStyle({ ...partialStyle, fontFamily: event.target.value })}>
+          <label className="field"><span>字体</span><select value={partialStyle.fontFamily} onChange={(event) => updatePartialStyle({ fontFamily: event.target.value })}>
             <option value={'Arial, "Microsoft YaHei", sans-serif'}>黑体 / Arial</option>
             <option value={'"Microsoft YaHei", sans-serif'}>微软雅黑</option>
             <option value={'SimSun, serif'}>宋体</option>
@@ -95,19 +106,16 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
             <option value={'"Times New Roman", serif'}>Times New Roman</option>
             <option value={'Consolas, monospace'}>等宽字体</option>
           </select></label>
-          <label className="field"><span>字号（pt）</span><input type="number" min="8" max="120" value={partialStyle.fontSizePt ?? 32} onChange={(event) => setPartialStyle({ ...partialStyle, fontSizePt: Number(event.target.value) })} /></label>
+          <label className="field"><span>字号（pt）</span><input type="number" min="8" max="120" value={partialStyle.fontSizePt ?? 32} onChange={(event) => updatePartialStyle({ fontSizePt: Number(event.target.value) })} /></label>
         </div>
         {activeLine && <label className="field line-orientation"><span>本行方向</span><select
           value={activeLine.textOrientation}
           onChange={(event) => onChange({ textLines: updateTextLine(label.textLines, activeLine.id, { textOrientation: event.target.value as 'horizontal' | 'vertical' }) })}
         ><option value="horizontal">横排</option><option value="vertical">竖排</option></select></label>}
         <div className="partial-style-toggles">
-          <label><input type="checkbox" checked={partialStyle.fontWeight === 700} onChange={(event) => setPartialStyle({ ...partialStyle, fontWeight: event.target.checked ? 700 : 400 })} />粗体</label>
-          <label><input type="checkbox" checked={Boolean(partialStyle.italic)} onChange={(event) => setPartialStyle({ ...partialStyle, italic: event.target.checked })} />斜体</label>
-          <label><input type="checkbox" checked={Boolean(partialStyle.underline)} onChange={(event) => setPartialStyle({ ...partialStyle, underline: event.target.checked })} />下划线</label>
-          <button className="button button-quiet button-compact" type="button" disabled={!activeLine} onClick={applyPartialStyle}>
-            {selectedCount ? '应用到选中文字' : `应用到第 ${activeLineIndex + 1} 行`}
-          </button>
+          <label><input type="checkbox" checked={partialStyle.fontWeight === 700} onChange={(event) => updatePartialStyle({ fontWeight: event.target.checked ? 700 : 400 })} />粗体</label>
+          <label><input type="checkbox" checked={Boolean(partialStyle.italic)} onChange={(event) => updatePartialStyle({ italic: event.target.checked })} />斜体</label>
+          <label><input type="checkbox" checked={Boolean(partialStyle.underline)} onChange={(event) => updatePartialStyle({ underline: event.target.checked })} />下划线</label>
         </div>
         {label.textStyleRanges.length > 0 && <small>已应用 {label.textStyleRanges.length} 段局部样式；修改正文后会自动清除。</small>}
       </fieldset>

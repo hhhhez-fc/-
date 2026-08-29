@@ -8,6 +8,7 @@ import {
   type ParsedSheet,
 } from '../src/domain/importing';
 import { applyTextStyleRange, buildStyledSegments } from '../src/domain/richText';
+import * as richTextDomain from '../src/domain/richText';
 import { describePlacement, resolvePlacement } from '../src/domain/placement';
 import { createInitialDraft, draftReducer } from '../src/domain/draft';
 import { createLabel, defaultSizePresets } from '../src/domain/labels';
@@ -74,6 +75,62 @@ describe('局部文字样式', () => {
     const next = draftReducer(state, { type: 'update-label', id: label.id, patch: { content: 'FY-02' } });
 
     expect(next.labels[0].textStyleRanges).toEqual([]);
+  });
+
+  it('选中文字或当前行的样式修改会立即生成对应补丁', () => {
+    const label = createLabel({ content: 'FY-01\nMADE IN CHINA', quantity: 1, source: 'manual', needsReview: false });
+    const buildImmediateTextStylePatch = (richTextDomain as typeof richTextDomain & {
+      buildImmediateTextStylePatch?: (
+        source: typeof label,
+        lineId: string,
+        selection: { start: number; end: number },
+        style: { fontFamily?: string; underline?: boolean },
+      ) => Partial<typeof label>;
+    }).buildImmediateTextStylePatch;
+
+    expect(typeof buildImmediateTextStylePatch).toBe('function');
+    expect(buildImmediateTextStylePatch?.(label, label.textLines[0].id, { start: 0, end: 2 }, { underline: true }))
+      .toMatchObject({ textStyleRanges: [{ start: 0, end: 2, style: { underline: true } }] });
+    expect(buildImmediateTextStylePatch?.(label, label.textLines[1].id, { start: 0, end: 0 }, { fontFamily: 'SimSun, serif' })
+      .textLines?.[1].style).toEqual({ fontFamily: 'SimSun, serif' });
+  });
+
+  it('全部文字样式会覆盖已有逐行和局部字符样式', () => {
+    const label = createLabel({
+      content: 'FY-01\nMADE IN CHINA',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      textStyleRanges: [{ start: 0, end: 2, style: { fontFamily: 'Arial', italic: false } }],
+    });
+    label.textLines[0].style = { fontFamily: 'Arial', italic: false };
+    const buildAllTextStylePatch = (richTextDomain as typeof richTextDomain & {
+      buildAllTextStylePatch?: (
+        source: typeof label,
+        style: { fontFamily?: string; fontMode?: 'auto' | 'fixed'; fontSizePt?: number; italic?: boolean },
+      ) => Partial<typeof label>;
+    }).buildAllTextStylePatch;
+
+    expect(typeof buildAllTextStylePatch).toBe('function');
+    const patch = buildAllTextStylePatch?.(label, { fontFamily: 'SimSun, serif', fontMode: 'fixed', fontSizePt: 36, italic: true });
+    expect(patch?.style).toMatchObject({ fontFamily: 'SimSun, serif', fontMode: 'fixed', fontSizePt: 36, italic: true });
+    expect(patch?.textLines?.every((line) => line.style.fontFamily === 'SimSun, serif' && line.style.fontSizePt === 36 && line.style.italic)).toBe(true);
+    expect(patch?.textStyleRanges?.[0].style).toMatchObject({ fontFamily: 'SimSun, serif', fontSizePt: 36, italic: true });
+  });
+
+  it('切回自动字号会清除逐行和局部字符的固定字号', () => {
+    const label = createLabel({
+      content: 'FY-01', quantity: 1, source: 'manual', needsReview: false,
+      textStyleRanges: [{ start: 0, end: 2, style: { fontSizePt: 48, underline: true } }],
+    });
+    label.textLines[0].style = { fontSizePt: 48, underline: true };
+    const buildAllTextStylePatch = (richTextDomain as typeof richTextDomain & {
+      buildAllTextStylePatch?: (source: typeof label, style: { fontMode: 'auto' }) => Partial<typeof label>;
+    }).buildAllTextStylePatch;
+
+    const patch = buildAllTextStylePatch?.(label, { fontMode: 'auto' });
+    expect(patch?.textLines?.[0].style).toEqual({ underline: true });
+    expect(patch?.textStyleRanges?.[0].style).toEqual({ underline: true });
   });
 });
 

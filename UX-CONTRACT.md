@@ -35,7 +35,7 @@
 | Table Selection | `ExcelImporter` 语义表格；记录仍使用 `LabelList` | 本合同 | 多个矩形区域、精确地址 | 纯函数 + 浏览器 |
 | Select/Listbox | 原生 `select` | `DESIGN.md` | native | 键盘 + 浏览器弹层 |
 | Date | 不适用 | 本合同 | 不适用 | 不适用 |
-| Form | `LabelEditor` / `SizeStylePanel` 共享字段样式 | 本合同 | edit | reducer + 浏览器验证 |
+| Form | `LabelEditor` / `SizeStylePanel` 共享字段样式与即时文字样式补丁 | 本合同 | edit / current-line / selected-text / all-text | reducer + 浏览器验证 |
 | Scrollbar | `src/styles.css` 全局规则 | `DESIGN.md` | stable-gutter | 计算样式 |
 | Toast | `AppStatus` 单一实时状态区 | 本合同 | success / warning / error | live-region 检查 |
 | CRUD | `draftReducer` | 设计规格 | stay-inline | reducer + 完整流程 |
@@ -51,6 +51,7 @@
 | Draggable text | 九宫格居中 | 抓取光标 | 蓝色外环、方向键微调 | 吸附线与位置文字 | n/a | n/a | 溢出状态 |
 | Print area | 内边距范围 | 蓝色实线与控制点 | 蓝色外环、方向键微调 | 整体拖动或八方向缩放 | n/a | n/a | 自动限制在纸张内 |
 | Preview inline edit | 双击文字行进入原位编辑 | 文本光标 | 无输入边框，仅显示插入光标 | 输入即时同步正文 | n/a | n/a | 保留原内容并可按 Escape 撤销本次编辑 |
+| Text style controls | 全部文字 / 当前行 / 选中文字 | 控件边线加深 | 蓝色外环 | 修改即时反映到预览 | 不适用项保留说明 | n/a | 无有效行时不提交补丁 |
 | Image crop | 整图范围 | 框线加深 | 数字字段蓝色外环 | 蓝色框+深色遮罩 | 忙碌时锁定处理动作 | 识别进度保留高度 | 文件项内联说明 |
 
 ## Dataset navigation
@@ -68,7 +69,7 @@
 | Operation | Trigger | Pending | Success destination | Success feedback | Failure recovery | Focus outcome | Source ref |
 |---|---|---|---|---|---|---|---|
 | Create | 手动新增/导入 | 文件区稳定进度 | 当前列表 | 状态区报告新增数量 | 保留成功项，失败项内联 | 新记录编辑器 | 设计规格 |
-| Edit | 字段即时编辑 | 本地操作无需加载 | 原位置 | 草稿状态显示“已保存在本机” | 存储失败显示持久提示 | 保持字段焦点 | 设计规格 |
+| Edit | 字段与文字样式即时编辑 | 本地操作无需加载；无需二次“应用” | 原位置 | 预览即时更新，草稿状态显示“已保存在本机” | 存储失败显示持久提示 | 保持字段焦点 | 用户浏览器批注确认 |
 | Position text | 按下只选中；移动超过 4px 后拖动，或使用方向键 | 即时预览 | 原位置 | 显示吸附类型 | 恢复正中 | 保持文字对象焦点 | 用户确认需求 |
 | Position print area | 拖动区域/控制点，或输入毫米数值 | 即时预览 | 原位置 | 状态区保存草稿 | 恢复默认区域 | 保持区域或字段焦点 | 用户确认需求 |
 | Edit preview text | 双击某一文字行 | 即时预览 | 原位置 | 输入即时同步校对正文；Enter 或失焦完成 | Escape 恢复进入编辑前内容 | 保持原位或返回文字对象 | 用户确认需求 |
@@ -84,7 +85,7 @@
 
 - Route document title policy: `唛头打印工作台`。
 - Breadcrumb/tab/route-state policy: 单页无路由；不使用标签页伪装步骤。
-- Responsive transformation: 三栏在 1100px 以下按录入、列表、预览堆叠。
+- Responsive transformation: 大于 1120px 时预览栏最宽且画布至少约 32rem 高；1120px 以下先转两栏并让预览横跨全宽，720px 以下按录入、列表、预览堆叠。低频尺寸设置使用原生详情折叠区，全部文字样式保持可见。
 - Physical preview contract: 纸张宽高与内容打印区域都使用毫米；内容区域移动/缩放后始终限制在纸张内，并由屏幕预览和打印页共同消费。自动字号只由文字内容、横竖方向、局部样式与打印区毫米尺寸决定；拖动和方向键仅改变位置。越界或文字行重叠时保持字号并显示校验错误；屏幕预览按纸张渲染宽度同步缩放 pt、毫米坐标和边框，打印页使用相同物理字号。
 - Truncation/full-value access: 唛头内容在列表最多两行，编辑器和预览始终提供完整值。
 - Focus restoration and sticky-obstruction policy: 对话框关闭回触发器；焦点使用 `scroll-margin`，无固定遮挡栏。

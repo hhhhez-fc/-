@@ -1,4 +1,5 @@
-import type { InlineTextStyle, TextStyleRange } from './labels';
+import type { InlineTextStyle, LabelRecord, LabelStyle, TextStyleRange } from './labels';
+import { updateTextLine } from './textLines';
 
 export interface StyledTextSegment {
   text: string;
@@ -32,4 +33,56 @@ export function buildStyledSegments(content: string, ranges: TextStyleRange[]): 
     ), {});
     return { text: content.slice(start, end), style };
   }).filter((segment) => segment.text.length > 0);
+}
+
+export function buildImmediateTextStylePatch(
+  label: LabelRecord,
+  activeLineId: string,
+  selection: { start: number; end: number },
+  style: InlineTextStyle,
+): Partial<LabelRecord> {
+  if (selection.end > selection.start) {
+    return { textStyleRanges: applyTextStyleRange(label.textStyleRanges, selection.start, selection.end, style) };
+  }
+  const activeLine = label.textLines.find((line) => line.id === activeLineId);
+  if (!activeLine) return {};
+  return {
+    textLines: updateTextLine(label.textLines, activeLine.id, { style: { ...activeLine.style, ...style } }),
+  };
+}
+
+export type AllTextStylePatch = Partial<Pick<
+  LabelStyle,
+  'fontFamily' | 'fontMode' | 'fontSizePt' | 'fontWeight' | 'italic' | 'underline'
+>>;
+
+function applyAllTextInlineStyle(
+  style: InlineTextStyle,
+  patch: AllTextStylePatch,
+): InlineTextStyle {
+  const next = { ...style };
+  if (patch.fontFamily !== undefined) next.fontFamily = patch.fontFamily;
+  if (patch.fontSizePt !== undefined) next.fontSizePt = patch.fontSizePt;
+  if (patch.fontWeight !== undefined) next.fontWeight = patch.fontWeight;
+  if (patch.italic !== undefined) next.italic = patch.italic;
+  if (patch.underline !== undefined) next.underline = patch.underline;
+  if (patch.fontMode === 'auto') delete next.fontSizePt;
+  return next;
+}
+
+export function buildAllTextStylePatch(
+  label: LabelRecord,
+  patch: AllTextStylePatch,
+): Partial<LabelRecord> {
+  return {
+    style: { ...label.style, ...patch },
+    textLines: label.textLines.map((line) => ({
+      ...line,
+      style: applyAllTextInlineStyle(line.style, patch),
+    })),
+    textStyleRanges: label.textStyleRanges.map((range) => ({
+      ...range,
+      style: applyAllTextInlineStyle(range.style, patch),
+    })),
+  };
 }

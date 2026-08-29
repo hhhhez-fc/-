@@ -8,6 +8,7 @@ import ImageCropSelector from '../src/features/ImageCropSelector';
 import PrintReviewDialog, * as printReviewModule from '../src/features/PrintReviewDialog';
 import PrintPages from '../src/features/PrintPages';
 import SizeStylePanel from '../src/features/SizeStylePanel';
+import LabelEditor from '../src/features/LabelEditor';
 import { createPrintPlan } from '../src/domain/printing';
 
 describe('唛头打印工作台', () => {
@@ -187,7 +188,7 @@ describe('逐行预览', () => {
 });
 
 describe('右侧样式设置', () => {
-  it('尺寸设置后只保留行距，不再重复整单文字样式', () => {
+  it('提供全部文字字体、字号和强调设置，并把低频尺寸设置折叠', () => {
     const label = createLabel({ content: 'FYF-TTT0103\n4576', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<SizeStylePanel
       label={label}
@@ -202,14 +203,34 @@ describe('右侧样式设置', () => {
       onLineChange={() => undefined}
     />);
 
+    expect(html).toContain('全部文字样式');
+    expect(html).toContain('<span>全部字体</span>');
+    expect(html).toContain('<span>字号模式</span>');
+    expect(html).toContain('<summary>');
+    expect(html).toContain('尺寸与打印区域');
     expect(html).toContain('<span>行距</span>');
     expect(html).not.toContain('<span>文字方向</span>');
-    expect(html).not.toContain('<span>字体</span>');
-    expect(html).not.toContain('<span>字号模式</span>');
-    expect(html).not.toContain('<span>固定字号（pt）</span>');
     expect(html).not.toContain('<span>水平对齐</span>');
     expect(html).not.toContain('<span>垂直对齐</span>');
     expect(html).not.toContain('<span>边框粗细（mm）</span>');
+  });
+
+  it('当前行和选中文字样式说明修改后立即生效，不再需要应用按钮', () => {
+    const label = createLabel({ content: 'FYF-TTT0103\n4576', quantity: 1, source: 'manual', needsReview: false });
+    const html = renderToStaticMarkup(<LabelEditor
+      label={label}
+      activeLineId={label.textLines[0].id}
+      onActiveLineChange={() => undefined}
+      onChange={() => undefined}
+      onReview={() => undefined}
+      reviewErrors={[]}
+      onDuplicate={() => undefined}
+      onDelete={() => undefined}
+    />);
+
+    expect(html).toContain('修改后立即生效');
+    expect(html).not.toContain('应用到第');
+    expect(html).not.toContain('应用到选中文字');
   });
 
   it('提供毫米数值输入和恢复默认作为拖动替代操作', () => {
