@@ -1,1 +1,17 @@
 .worktrees/
+
+node_modules/
+dist/
+.pnpm-store/
+coverage/
+*.log
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
