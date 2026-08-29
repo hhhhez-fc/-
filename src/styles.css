@@ -75,14 +75,24 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 
 .workspace {
   display: grid;
-  grid-template-areas: "intake preview records";
-  grid-template-columns: minmax(220px,.55fr) minmax(540px,1.75fr) minmax(250px,.7fr);
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fit, minmax(220px, max-content));
   gap: var(--space-md); align-items: start; padding-top: var(--space-md);
 }
-.intake-panel { grid-area: intake; }
-.records-panel { grid-area: records; }
-.preview-panel { grid-area: preview; }
 .panel { min-width: 0; overflow: clip; background: rgba(255,253,247,.93); border: 1px solid var(--color-line); border-radius: var(--radius-lg); }
+.workspace-panel {
+  position: relative; display: flex; flex-direction: column; inline-size: min(100%, var(--panel-width)); block-size: var(--panel-height);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.workspace-panel:focus-within, .workspace-panel[data-dragging="true"] { border-color: var(--color-focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 28%, transparent); }
+.workspace-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; }
+.panel-drag-handle { cursor: grab; user-select: none; touch-action: none; }
+.workspace-panel[data-dragging="true"] .panel-drag-handle { cursor: grabbing; }
+.panel-resizer { position: absolute; z-index: 2; display: block; background: transparent; touch-action: none; }
+.panel-resizer:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.panel-resizer-x { inset: 0 -4px 0 auto; inline-size: 8px; cursor: ew-resize; }
+.panel-resizer-y { inset: auto 0 -4px 0; block-size: 8px; cursor: ns-resize; }
+.panel-resizer-corner { inset: auto -4px -4px auto; inline-size: 12px; block-size: 12px; cursor: nwse-resize; }
 .panel-heading {
   display: flex; gap: .75rem; align-items: flex-start; padding: .9rem 1rem; background: #f5f5ef; border-bottom: 1px solid var(--color-line);
 }
@@ -223,11 +233,11 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .bulk-toolbar > div { display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; }
 .bulk-toolbar button:disabled { color: #9aa09b; cursor: not-allowed; text-decoration: none; }
 
-.records-empty, .preview-empty {
+.records-empty, .preview-empty, .history-empty {
   display: grid; place-items: center; align-content: center; gap: .45rem; min-height: 14rem; padding: 2rem; color: var(--color-muted); text-align: center;
 }
-.records-empty strong, .preview-empty strong { color: var(--color-ink); }
-.records-empty span, .preview-empty span { max-width: 22rem; font-size: .75rem; line-height: 1.5; }
+.records-empty strong, .preview-empty strong, .history-empty strong { color: var(--color-ink); }
+.records-empty span, .preview-empty span, .history-empty span { max-width: 22rem; font-size: .75rem; line-height: 1.5; }
 .editor-title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
 .editor-title-row span { color: var(--color-muted); font-size: .68rem; }
 .review-reason { margin: -.3rem 0 .8rem; padding: .45rem .6rem; color: #6d480a; background: #fff5dc; border-left: 3px solid var(--color-warning); font-size: .68rem; }
@@ -404,16 +414,15 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .print-root { display: none; }
 
 @media (max-width: 1120px) {
-  .workspace {
-    grid-template-areas: "intake records" "preview preview";
-    grid-template-columns: 1fr 1.25fr;
-  }
+  .workspace { grid-template-columns: repeat(auto-fit, minmax(220px, max-content)); }
 }
 @media (max-width: 720px) {
   .app-shell { padding: .75rem; }
   .app-header, .header-actions { align-items: stretch; flex-direction: column; }
   .app-status { min-width: 0; text-align: left; }
-  .workspace { grid-template-areas: "intake" "records" "preview"; grid-template-columns: minmax(0,1fr); }
+  .workspace { grid-template-columns: minmax(0,1fr); }
+  .workspace-panel { inline-size: 100%; }
+  .panel-resizer-x, .panel-resizer-corner { display: none; }
   .two-columns { grid-template-columns: minmax(0,1fr); }
   .three-columns { grid-template-columns: minmax(0,1fr); }
   .four-columns { grid-template-columns: repeat(2,minmax(0,1fr)); }

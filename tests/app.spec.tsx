@@ -21,6 +21,16 @@ describe('唛头打印工作台', () => {
     expect(html).toContain('手动新增');
     expect(html).toContain('还没有唛头');
   });
+
+  it('将四个工作区板块暴露为可拖动、可调整大小的区域', () => {
+    const html = renderToStaticMarkup(<App initialState={createInitialDraft()} />);
+
+    expect(html).toContain('aria-labelledby="history-title"');
+    expect(html).toContain('使用过的唛头');
+    expect(html.match(/data-testid="panel-drag-handle"/g)).toHaveLength(4);
+    expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*宽度"/g)).toHaveLength(4);
+    expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*高度"/g)).toHaveLength(4);
+  });
 });
 
 describe('打印检查', () => {

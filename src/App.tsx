@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { createInitialDraft, draftReducer, type DraftState } from './domain/draft';
 import { createLabel, defaultSizeTypeForBusiness, type LabelPurpose } from './domain/labels';
 import { loadDraft, saveDraft } from './domain/storage';
@@ -14,6 +14,8 @@ import PrintPages from './features/PrintPages';
 import { createPrintPlan, type PrintGroup } from './domain/printing';
 import { validateLabelForPrint } from './domain/layout';
 import { validateSizePreset } from './domain/labels';
+import { reorderWorkspacePanels, type WorkspacePanelId } from './domain/workspaceLayout';
+import WorkspacePanel from './features/WorkspacePanel';
 
 interface AppProps {
   initialState?: DraftState;
@@ -130,6 +132,186 @@ export default function App({ initialState }: AppProps) {
 
   const selectedCount = state.selectedLabelIds.length;
   const allSelected = state.labels.length > 0 && selectedCount === state.labels.length;
+  const panelContents: Record<WorkspacePanelId, ReactNode> = {
+    intake: <>
+      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动录入来源板块">
+        <span className="step-number">01</span>
+        <div>
+          <h2 id="intake-title">录入来源</h2>
+          <p>先选择业务，再导入或新增。</p>
+        </div>
+      </div>
+
+      <div className="field-stack">
+        <label className="field">
+          <span>业务类型</span>
+          <input
+            value={state.business}
+            onChange={(event) => dispatch({ type: 'set-business', business: event.target.value })}
+            placeholder="例如：义乌铺、外贸"
+          />
+          <small>义乌铺默认大唛头，其他业务默认小唛头。</small>
+        </label>
+
+        <label className="field">
+          <span>唛头用途</span>
+          <select
+            value={state.purpose}
+            onChange={(event) => dispatch({ type: 'set-purpose', purpose: event.target.value as LabelPurpose })}
+          >
+            <option value="carton">外箱唛头</option>
+            <option value="envelope">信封唛头</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="source-actions" aria-label="选择录入方式">
+        <ExcelImporter
+          sizePresetId={defaultSizeTypeForBusiness(state.business)}
+          purpose={state.purpose}
+          onImport={(labels) => dispatch({ type: 'import-labels', labels })}
+          onStatus={setStatus}
+        />
+        <ImageImporter
+          sizePresetId={defaultSizeTypeForBusiness(state.business)}
+          purpose={state.purpose}
+          onImport={(labels) => dispatch({ type: 'import-labels', labels })}
+          onStatus={setStatus}
+        />
+        <button className="button button-primary manual-add" type="button" onClick={addManualLabel}>
+          手动新增
+        </button>
+      </div>
+
+      <aside className="privacy-note">
+        <strong>文件不会上传</strong>
+        <span>Excel、图片识别和草稿保存都在当前浏览器中完成。</span>
+      </aside>
+    </>,
+    records: <>
+      <div className="panel-heading records-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动校对清单板块">
+        <span className="step-number">02</span>
+        <div>
+          <h2 id="records-title">校对清单</h2>
+          <p>{state.labels.length} 条记录 · {state.labels.filter((label) => label.needsReview).length} 条待校对</p>
+        </div>
+      </div>
+      <LabelList
+        labels={state.labels}
+        activeLabelId={state.activeLabelId}
+        selectedLabelIds={state.selectedLabelIds}
+        onActivate={(id) => dispatch({ type: 'set-active-label', id })}
+        onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
+        onDuplicate={(id) => dispatch({ type: 'duplicate-label', id })}
+        onDelete={deleteLabel}
+      />
+      {state.labels.length > 0 && (
+        <div className="bulk-toolbar" aria-label="批量操作">
+          <span>{selectedCount ? `已选 ${selectedCount} 条` : '勾选后可批量应用样式'}</span>
+          <div>
+            <button type="button" onClick={() => dispatch({ type: 'set-selected', ids: allSelected ? [] : state.labels.map((label) => label.id) })}>
+              {allSelected ? '取消全选' : '全选'}
+            </button>
+            <button
+              type="button"
+              disabled={!activeLabel || selectedCount === 0}
+              onClick={() => activeLabel && dispatch({ type: 'apply-style-to-selected', style: activeLabel.style })}
+            >
+              应用当前样式
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setConfirmation({
+                title: `删除选中的 ${selectedCount} 条唛头？`,
+                message: '删除后无法撤销，未选中的记录不受影响。',
+                confirmLabel: '批量删除',
+                action: () => {
+                  state.selectedLabelIds.forEach((id) => dispatch({ type: 'delete-label', id }));
+                  setStatus(`已删除 ${selectedCount} 条唛头`);
+                },
+              })}
+            >
+              删除所选
+            </button>
+          </div>
+        </div>
+      )}
+      {activeLabel && (
+        <LabelEditor
+          label={activeLabel}
+          activeLineId={resolvedActiveLineId}
+          onActiveLineChange={setActiveLineId}
+          onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
+          onReview={() => dispatch({ type: 'mark-reviewed', id: activeLabel.id })}
+          reviewErrors={activeReviewErrors}
+          onDuplicate={() => dispatch({ type: 'duplicate-label', id: activeLabel.id })}
+          onDelete={() => deleteLabel(activeLabel.id)}
+        />
+      )}
+    </>,
+    preview: <>
+      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动尺寸与预览板块">
+        <span className="step-number">03</span>
+        <div>
+          <h2 id="preview-title">尺寸与预览</h2>
+          <p>毫米尺寸与最终打印效果同步。</p>
+        </div>
+      </div>
+      {activeLabel && activePreset ? (
+        <>
+          <LabelPreview
+            label={activeLabel}
+            preset={activePreset}
+            activeLineId={resolvedActiveLineId}
+            onActiveLineChange={setActiveLineId}
+            onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
+          />
+          <SizeStylePanel
+            label={activeLabel}
+            activeLine={activeLabel.textLines.find((line) => line.id === resolvedActiveLineId) ?? activeLabel.textLines[0] ?? null}
+            presets={state.sizePresets}
+            onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
+            onPresetChange={(id, patch) => dispatch({ type: 'update-size-preset', id, patch })}
+            onCreatePreset={createCustomPreset}
+            recentSizes={state.recentSizes}
+            onUseRecent={useRecentSize}
+            onRememberSize={(preset) => dispatch({ type: 'remember-size', preset })}
+            onLineChange={(lineId, patch) => dispatch({
+              type: 'update-label',
+              id: activeLabel.id,
+              patch: { textLines: activeLabel.textLines.map((line) => line.id === lineId ? { ...line, ...patch } : line) },
+            })}
+          />
+        </>
+      ) : (
+        <div className="preview-empty">
+          <div className="empty-sheet" aria-hidden="true">+</div>
+          <strong>选择一条唛头后显示预览</strong>
+          <span>尺寸、字体和溢出状态会在这里实时更新。</span>
+        </div>
+      )}
+    </>,
+    history: <>
+      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动使用过的唛头板块">
+        <span className="step-number">04</span>
+        <div>
+          <h2 id="history-title">使用过的唛头</h2>
+          <p>最近使用的唛头会显示在这里。</p>
+        </div>
+      </div>
+      <div className="history-empty">
+        <strong>暂时没有使用记录</strong>
+        <span>完成打印后，历史唛头会保存在这个板块。</span>
+      </div>
+    </>,
+  };
+  const panelTitleIds: Record<WorkspacePanelId, string> = {
+    intake: 'intake-title',
+    records: 'records-title',
+    preview: 'preview-title',
+    history: 'history-title',
+  };
 
   return (
     <>
@@ -165,167 +347,22 @@ export default function App({ initialState }: AppProps) {
       </header>
 
       <main className="workspace" aria-label="唛头打印工作区">
-        <section className="panel intake-panel" aria-labelledby="intake-title">
-          <div className="panel-heading">
-            <span className="step-number">01</span>
-            <div>
-              <h2 id="intake-title">录入来源</h2>
-              <p>先选择业务，再导入或新增。</p>
-            </div>
-          </div>
-
-          <div className="field-stack">
-            <label className="field">
-              <span>业务类型</span>
-              <input
-                value={state.business}
-                onChange={(event) => dispatch({ type: 'set-business', business: event.target.value })}
-                placeholder="例如：义乌铺、外贸"
-              />
-              <small>义乌铺默认大唛头，其他业务默认小唛头。</small>
-            </label>
-
-            <label className="field">
-              <span>唛头用途</span>
-              <select
-                value={state.purpose}
-                onChange={(event) => dispatch({ type: 'set-purpose', purpose: event.target.value as LabelPurpose })}
-              >
-                <option value="carton">外箱唛头</option>
-                <option value="envelope">信封唛头</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="source-actions" aria-label="选择录入方式">
-            <ExcelImporter
-              sizePresetId={defaultSizeTypeForBusiness(state.business)}
-              purpose={state.purpose}
-              onImport={(labels) => dispatch({ type: 'import-labels', labels })}
-              onStatus={setStatus}
-            />
-            <ImageImporter
-              sizePresetId={defaultSizeTypeForBusiness(state.business)}
-              purpose={state.purpose}
-              onImport={(labels) => dispatch({ type: 'import-labels', labels })}
-              onStatus={setStatus}
-            />
-            <button className="button button-primary manual-add" type="button" onClick={addManualLabel}>
-              手动新增
-            </button>
-          </div>
-
-          <aside className="privacy-note">
-            <strong>文件不会上传</strong>
-            <span>Excel、图片识别和草稿保存都在当前浏览器中完成。</span>
-          </aside>
-        </section>
-
-        <section className="panel records-panel" aria-labelledby="records-title">
-          <div className="panel-heading records-heading">
-            <span className="step-number">02</span>
-            <div>
-              <h2 id="records-title">校对清单</h2>
-              <p>{state.labels.length} 条记录 · {state.labels.filter((label) => label.needsReview).length} 条待校对</p>
-            </div>
-          </div>
-          <LabelList
-            labels={state.labels}
-            activeLabelId={state.activeLabelId}
-            selectedLabelIds={state.selectedLabelIds}
-            onActivate={(id) => dispatch({ type: 'set-active-label', id })}
-            onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
-            onDuplicate={(id) => dispatch({ type: 'duplicate-label', id })}
-            onDelete={deleteLabel}
-          />
-          {state.labels.length > 0 && (
-            <div className="bulk-toolbar" aria-label="批量操作">
-              <span>{selectedCount ? `已选 ${selectedCount} 条` : '勾选后可批量应用样式'}</span>
-              <div>
-                <button type="button" onClick={() => dispatch({ type: 'set-selected', ids: allSelected ? [] : state.labels.map((label) => label.id) })}>
-                  {allSelected ? '取消全选' : '全选'}
-                </button>
-                <button
-                  type="button"
-                  disabled={!activeLabel || selectedCount === 0}
-                  onClick={() => activeLabel && dispatch({ type: 'apply-style-to-selected', style: activeLabel.style })}
-                >
-                  应用当前样式
-                </button>
-                <button
-                  type="button"
-                  disabled={selectedCount === 0}
-                  onClick={() => setConfirmation({
-                    title: `删除选中的 ${selectedCount} 条唛头？`,
-                    message: '删除后无法撤销，未选中的记录不受影响。',
-                    confirmLabel: '批量删除',
-                    action: () => {
-                      state.selectedLabelIds.forEach((id) => dispatch({ type: 'delete-label', id }));
-                      setStatus(`已删除 ${selectedCount} 条唛头`);
-                    },
-                  })}
-                >
-                  删除所选
-                </button>
-              </div>
-            </div>
-          )}
-          {activeLabel && (
-            <LabelEditor
-              label={activeLabel}
-              activeLineId={resolvedActiveLineId}
-              onActiveLineChange={setActiveLineId}
-              onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
-              onReview={() => dispatch({ type: 'mark-reviewed', id: activeLabel.id })}
-              reviewErrors={activeReviewErrors}
-              onDuplicate={() => dispatch({ type: 'duplicate-label', id: activeLabel.id })}
-              onDelete={() => deleteLabel(activeLabel.id)}
-            />
-          )}
-        </section>
-
-        <section className="panel preview-panel" aria-labelledby="preview-title">
-          <div className="panel-heading">
-            <span className="step-number">03</span>
-            <div>
-              <h2 id="preview-title">尺寸与预览</h2>
-              <p>毫米尺寸与最终打印效果同步。</p>
-            </div>
-          </div>
-          {activeLabel && activePreset ? (
-            <>
-              <LabelPreview
-                label={activeLabel}
-                preset={activePreset}
-                activeLineId={resolvedActiveLineId}
-                onActiveLineChange={setActiveLineId}
-                onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
-              />
-              <SizeStylePanel
-                label={activeLabel}
-                activeLine={activeLabel.textLines.find((line) => line.id === resolvedActiveLineId) ?? activeLabel.textLines[0] ?? null}
-                presets={state.sizePresets}
-                onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
-                onPresetChange={(id, patch) => dispatch({ type: 'update-size-preset', id, patch })}
-                onCreatePreset={createCustomPreset}
-                recentSizes={state.recentSizes}
-                onUseRecent={useRecentSize}
-                onRememberSize={(preset) => dispatch({ type: 'remember-size', preset })}
-                onLineChange={(lineId, patch) => dispatch({
-                  type: 'update-label',
-                  id: activeLabel.id,
-                  patch: { textLines: activeLabel.textLines.map((line) => line.id === lineId ? { ...line, ...patch } : line) },
-                })}
-              />
-            </>
-          ) : (
-            <div className="preview-empty">
-              <div className="empty-sheet" aria-hidden="true">+</div>
-              <strong>选择一条唛头后显示预览</strong>
-              <span>尺寸、字体和溢出状态会在这里实时更新。</span>
-            </div>
-          )}
-        </section>
+        {state.workspaceLayout.order.map((id) => (
+          <WorkspacePanel
+            key={id}
+            id={id}
+            titleId={panelTitleIds[id]}
+            size={state.workspaceLayout.sizes[id]}
+            className={`${id}-panel`}
+            onDropBefore={(sourceId, targetId) => dispatch({
+              type: 'set-panel-order',
+              order: reorderWorkspacePanels(state.workspaceLayout, sourceId, targetId).order,
+            })}
+            onResize={(panelId, patch) => dispatch({ type: 'resize-panel', id: panelId, patch })}
+          >
+            {panelContents[id]}
+          </WorkspacePanel>
+        ))}
       </main>
     </div>
     <ConfirmDialog
