@@ -298,13 +298,6 @@ export default function App({ initialState }: AppProps) {
       </div>
       {activeLabel && activePreset ? (
         <>
-          <LabelPreview
-            label={activeLabel}
-            preset={activePreset}
-            activeLineId={resolvedActiveLineId}
-            onActiveLineChange={setActiveLineId}
-            onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
-          />
           <SizeStylePanel
             label={activeLabel}
             presets={state.sizePresets}
@@ -314,6 +307,13 @@ export default function App({ initialState }: AppProps) {
             recentSizes={state.recentSizes}
             onUseRecent={useRecentSize}
             onRememberSize={(preset) => dispatch({ type: 'remember-size', preset })}
+          />
+          <LabelPreview
+            label={activeLabel}
+            preset={activePreset}
+            activeLineId={resolvedActiveLineId}
+            onActiveLineChange={setActiveLineId}
+            onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
           />
         </>
       ) : (

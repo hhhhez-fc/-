@@ -30,12 +30,7 @@ export default function SizeStylePanel({ label, presets, onChange, onPresetChang
   };
   return (
     <div className="style-panel">
-      <h3>文字与尺寸</h3>
-      <section className="all-text-style" aria-labelledby="all-text-style-title">
-        <div className="all-text-style-heading">
-          <strong id="all-text-style-title">全部文字样式</strong>
-          <span>修改后覆盖预览中的全部文字</span>
-        </div>
+      <section className="all-text-style" aria-label="全部文字样式">
         <div className="field-grid all-text-style-fields">
           <label className="field"><span>全部字体</span><select value={label.style.fontFamily} onChange={(event) => patchAllTextStyle({ fontFamily: event.target.value })}>
             <option value={'Arial, "Microsoft YaHei", sans-serif'}>黑体 / Arial</option>

@@ -41,6 +41,20 @@ describe('唛头打印工作台', () => {
     expect(html.match(/aria-valuenow=/g)).toHaveLength(6);
     expect(html).toContain('恢复默认布局');
   });
+
+  it('把全部文字工具栏紧贴尺寸与预览标题并放在预览画布之前', () => {
+    const label = createLabel({ content: 'AREEN-21\n56614', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    const html = renderToStaticMarkup(<App initialState={state} />);
+
+    const previewHeading = html.indexOf('尺寸与预览');
+    const textToolbar = html.indexOf('aria-label="全部文字样式"');
+    const previewCanvas = html.indexOf('class="preview-stage"');
+
+    expect(previewHeading).toBeGreaterThanOrEqual(0);
+    expect(textToolbar).toBeGreaterThan(previewHeading);
+    expect(previewCanvas).toBeGreaterThan(textToolbar);
+  });
 });
 
 describe('打印检查', () => {
@@ -213,6 +227,25 @@ describe('逐行预览', () => {
 });
 
 describe('右侧样式设置', () => {
+  it('省去重复区域标题和说明，只保留直接操作控件', () => {
+    const label = createLabel({ content: 'FYF-TTT0103\n4576', quantity: 1, source: 'manual', needsReview: false });
+    const html = renderToStaticMarkup(<SizeStylePanel
+      label={label}
+      presets={defaultSizePresets}
+      onChange={() => undefined}
+      onPresetChange={() => undefined}
+      onCreatePreset={() => undefined}
+      recentSizes={[]}
+      onUseRecent={() => undefined}
+      onRememberSize={() => undefined}
+    />);
+
+    expect(html).toContain('aria-label="全部文字样式"');
+    expect(html).not.toContain('>文字与尺寸<');
+    expect(html).not.toContain('修改后覆盖预览中的全部文字');
+    expect(html).toContain('全部文字强调');
+  });
+
   it('提供直接的全部文字字号、排列方式和强调设置，并把低频尺寸设置折叠', () => {
     const label = createLabel({ content: 'FYF-TTT0103\n4576', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<SizeStylePanel
