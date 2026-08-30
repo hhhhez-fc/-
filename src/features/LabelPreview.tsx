@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEve
 import { getPreviewScale, MM_TO_PX, solveLabelTextLayout } from '../domain/layout';
 import { describePlacement, movePrintArea, resizePrintArea, resolvePrintArea, type PrintAreaResizeHandle } from '../domain/placement';
 import {
+  didPointerMove,
   resolvePointerDragUpdate,
   resolveTextResizeFontSize,
   type PointerDragStart,
@@ -62,6 +63,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
   const dragStartRef = useRef<(PointerDragStart & { lineId: string }) | null>(null);
   const textResizeRef = useRef<TextResizeStart | null>(null);
   const printAreaDragRef = useRef<PrintAreaDragStart | null>(null);
+  const printAreaHandleMovedRef = useRef(false);
   const editInputRef = useRef<HTMLInputElement>(null);
   const editStartRef = useRef<{ lineId: string; text: string } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -104,7 +106,8 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     if (!start || !bounds?.width || !bounds.height) return;
     const deltaXpx = event.clientX - start.clientX;
     const deltaYpx = event.clientY - start.clientY;
-    if ((deltaXpx * deltaXpx) + (deltaYpx * deltaYpx) < 16) return;
+    if (!didPointerMove(start, event)) return;
+    printAreaHandleMovedRef.current = true;
     const deltaXmm = (deltaXpx / bounds.width) * preset.widthMm;
     const deltaYmm = (deltaYpx / bounds.height) * preset.heightMm;
     const next = start.mode === 'resize' && start.handle
@@ -117,6 +120,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     printAreaDragRef.current = null;
     setIsAreaDragging(false);
+    window.setTimeout(() => { printAreaHandleMovedRef.current = false; }, 0);
   };
   const movePrintAreaWithKeyboard = (event: KeyboardEvent<HTMLElement>) => {
     const amount = event.shiftKey ? 2 : 0.5;
@@ -345,10 +349,15 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
           key={handle.id}
           className={`print-area-handle handle-${handle.id}`}
           aria-label={`${handle.label}，方向键微调，Shift 加速，按 Enter 向外扩展`}
-          onClick={(event) => { event.stopPropagation(); expandPrintAreaFromHandle(handle.id); }}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (printAreaHandleMovedRef.current) return;
+            expandPrintAreaFromHandle(handle.id);
+          }}
           onKeyDown={(event) => resizePrintAreaWithKeyboard(handle.id, event)}
           onPointerDown={(event) => {
             event.stopPropagation();
+            printAreaHandleMovedRef.current = false;
             event.currentTarget.setPointerCapture(event.pointerId);
             printAreaDragRef.current = {
               clientX: event.clientX,
@@ -365,7 +374,13 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
       </div>
     </div>
     <div className={`layout-status ${layout && !layout.ok ? 'is-error' : ''}`} role="status">
-      {layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? fontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}
+      <span>{layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? fontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}</span>
+      {activeLine && <button
+        className="layout-status-action"
+        type="button"
+        aria-label={`第 ${activeIndex + 1} 行恢复正中`}
+        onClick={() => patchLine(activeLine, { placement: { xPercent: 50, yPercent: 50, horizontalSnap: 'center', verticalSnap: 'middle' } })}
+      >本行恢复正中</button>}
     </div>
   </div>;
 }

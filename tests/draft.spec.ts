@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLabel, defaultStyle } from '../src/domain/labels';
 import { createInitialDraft, draftReducer, type DraftState } from '../src/domain/draft';
-import { loadDraft, saveDraft } from '../src/domain/storage';
+import { loadDraft, recoverDraft, saveDraft, saveDraftSafely } from '../src/domain/storage';
 
 describe('草稿状态', () => {
   it('新增记录后将其设为当前记录并保留在列表中', () => {
@@ -68,6 +68,26 @@ describe('草稿状态', () => {
       order: ['history', 'preview', 'intake', 'records'],
       sizes: { history: { widthPx: 900, heightPx: 320 } },
     });
+  });
+
+  it('只恢复默认工作区布局而保留当前唛头', () => {
+    const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false });
+    const state = {
+      ...createInitialDraft(),
+      labels: [label],
+      workspaceLayout: {
+        order: ['history', 'preview', 'intake', 'records'] as DraftState['workspaceLayout']['order'],
+        sizes: {
+          ...createInitialDraft().workspaceLayout.sizes,
+          preview: { widthPx: 800, heightPx: 900, zoom: 1.25 },
+        },
+      },
+    };
+
+    const next = draftReducer(state, { type: 'reset-workspace-layout' });
+
+    expect(next.labels).toEqual([label]);
+    expect(next.workspaceLayout).toEqual(createInitialDraft().workspaceLayout);
   });
 
   it('从列表选择记录时更新当前编辑目标', () => {
@@ -212,5 +232,12 @@ describe('本地草稿存储', () => {
     const storage = { getItem: () => JSON.stringify(oldDraft) };
 
     expect(loadDraft(storage)?.labels[0].style).toMatchObject({ fontMode: 'fixed', fontSizePt: 36 });
+  });
+
+  it('浏览器拒绝取得本机存储时仍可恢复和继续编辑', () => {
+    const getBlockedStorage = () => { throw new Error('blocked'); };
+
+    expect(recoverDraft(getBlockedStorage)).toEqual(createInitialDraft());
+    expect(saveDraftSafely(getBlockedStorage, createInitialDraft())).toBe(false);
   });
 });

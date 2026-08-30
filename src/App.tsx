@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { createInitialDraft, draftReducer, type DraftState } from './domain/draft';
 import { createLabel, defaultSizeTypeForBusiness, type LabelPurpose } from './domain/labels';
-import { loadDraft, saveDraft } from './domain/storage';
+import { recoverDraft, saveDraftSafely } from './domain/storage';
 import LabelEditor from './features/LabelEditor';
 import LabelList from './features/LabelList';
 import LabelPreview from './features/LabelPreview';
@@ -14,20 +14,17 @@ import PrintPages from './features/PrintPages';
 import { createPrintPlan, type PrintGroup } from './domain/printing';
 import { validateLabelForPrint } from './domain/layout';
 import { validateSizePreset } from './domain/labels';
-import { reorderWorkspacePanels, type WorkspacePanelId } from './domain/workspaceLayout';
+import { moveWorkspacePanel, placeWorkspacePanel, type WorkspacePanelId } from './domain/workspaceLayout';
 import WorkspacePanel from './features/WorkspacePanel';
 
 interface AppProps {
   initialState?: DraftState;
 }
 
-function recoverDraft(): DraftState {
-  if (typeof window === 'undefined') return createInitialDraft();
-  return loadDraft(window.localStorage) ?? createInitialDraft();
-}
-
 export default function App({ initialState }: AppProps) {
-  const [state, dispatch] = useReducer(draftReducer, initialState ?? undefined, recoverDraft);
+  const [state, dispatch] = useReducer(draftReducer, initialState, (provided) => provided ?? (
+    typeof window === 'undefined' ? createInitialDraft() : recoverDraft(() => window.localStorage)
+  ));
   const [status, setStatus] = useState('草稿仅保存在这台电脑');
   const [confirmation, setConfirmation] = useState<null | {
     title: string;
@@ -38,6 +35,11 @@ export default function App({ initialState }: AppProps) {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const saveFailureRef = useRef(false);
+  const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
+    event.preventDefault();
+    event.returnValue = '';
+  }, []);
   const activeLabel = state.labels.find((label) => label.id === state.activeLabelId) ?? null;
   const activePreset = useMemo(
     () => state.sizePresets.find((preset) => preset.id === activeLabel?.sizePresetId) ?? state.sizePresets[0],
@@ -57,11 +59,25 @@ export default function App({ initialState }: AppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const timer = window.setTimeout(() => {
-      setStatus(saveDraft(window.localStorage, state) ? '已保存在本机' : '无法保存草稿，请勿关闭页面');
-    }, 180);
-    return () => window.clearTimeout(timer);
-  }, [state]);
+    const persistDraft = (updateStatus: boolean) => {
+      const saved = saveDraftSafely(() => window.localStorage, state);
+      if (updateStatus) setStatus(saved ? '已保存在本机' : '无法保存草稿，请勿关闭页面');
+      if (!saved && !saveFailureRef.current) window.addEventListener('beforeunload', warnBeforeUnload);
+      if (saved && saveFailureRef.current) window.removeEventListener('beforeunload', warnBeforeUnload);
+      saveFailureRef.current = !saved;
+    };
+    const handlePageHide = () => persistDraft(false);
+    const timer = window.setTimeout(() => persistDraft(true), 180);
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [state, warnBeforeUnload]);
+
+  useEffect(() => () => {
+    if (typeof window !== 'undefined') window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [warnBeforeUnload]);
 
   useEffect(() => {
     if (!activePrintGroup || typeof window === 'undefined') return;
@@ -132,9 +148,14 @@ export default function App({ initialState }: AppProps) {
 
   const selectedCount = state.selectedLabelIds.length;
   const allSelected = state.labels.length > 0 && selectedCount === state.labels.length;
+  const openActivePrintPreview = () => {
+    if (!activeLabel || activeReviewErrors.length > 0) return;
+    if (activeLabel.needsReview) dispatch({ type: 'mark-reviewed', id: activeLabel.id });
+    setPrintDialogOpen(true);
+  };
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
     intake: <>
-      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动录入来源板块">
+      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动录入来源板块">
         <span className="step-number">01</span>
         <div>
           <h2 id="intake-title">录入来源</h2>
@@ -189,7 +210,7 @@ export default function App({ initialState }: AppProps) {
       </aside>
     </>,
     records: <>
-      <div className="panel-heading records-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动校对清单板块">
+      <div className="panel-heading records-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动校对清单板块">
         <span className="step-number">02</span>
         <div>
           <h2 id="records-title">校对清单</h2>
@@ -243,7 +264,7 @@ export default function App({ initialState }: AppProps) {
           activeLineId={resolvedActiveLineId}
           onActiveLineChange={setActiveLineId}
           onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
-          onReview={() => dispatch({ type: 'mark-reviewed', id: activeLabel.id })}
+          onPrintPreview={openActivePrintPreview}
           reviewErrors={activeReviewErrors}
           onDuplicate={() => dispatch({ type: 'duplicate-label', id: activeLabel.id })}
           onDelete={() => deleteLabel(activeLabel.id)}
@@ -251,7 +272,7 @@ export default function App({ initialState }: AppProps) {
       )}
     </>,
     preview: <>
-      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动尺寸与预览板块">
+      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动尺寸与预览板块">
         <span className="step-number">03</span>
         <div>
           <h2 id="preview-title">尺寸与预览</h2>
@@ -269,7 +290,6 @@ export default function App({ initialState }: AppProps) {
           />
           <SizeStylePanel
             label={activeLabel}
-            activeLine={activeLabel.textLines.find((line) => line.id === resolvedActiveLineId) ?? activeLabel.textLines[0] ?? null}
             presets={state.sizePresets}
             onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
             onPresetChange={(id, patch) => dispatch({ type: 'update-size-preset', id, patch })}
@@ -277,11 +297,6 @@ export default function App({ initialState }: AppProps) {
             recentSizes={state.recentSizes}
             onUseRecent={useRecentSize}
             onRememberSize={(preset) => dispatch({ type: 'remember-size', preset })}
-            onLineChange={(lineId, patch) => dispatch({
-              type: 'update-label',
-              id: activeLabel.id,
-              patch: { textLines: activeLabel.textLines.map((line) => line.id === lineId ? { ...line, ...patch } : line) },
-            })}
           />
         </>
       ) : (
@@ -293,7 +308,7 @@ export default function App({ initialState }: AppProps) {
       )}
     </>,
     history: <>
-      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle draggable aria-label="拖动使用过的唛头板块">
+      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动使用过的唛头板块">
         <span className="step-number">04</span>
         <div>
           <h2 id="history-title">使用过的唛头</h2>
@@ -340,6 +355,14 @@ export default function App({ initialState }: AppProps) {
               清空草稿
             </button>
           )}
+          <button
+            className="button button-quiet"
+            type="button"
+            onClick={() => {
+              dispatch({ type: 'reset-workspace-layout' });
+              setStatus('已恢复默认工作区布局');
+            }}
+          >恢复默认布局</button>
           <button className="button button-print" type="button" disabled={state.labels.length === 0} onClick={() => setPrintDialogOpen(true)}>
             检查并打印
           </button>
@@ -354,9 +377,13 @@ export default function App({ initialState }: AppProps) {
             titleId={panelTitleIds[id]}
             size={state.workspaceLayout.sizes[id]}
             className={`${id}-panel`}
-            onDropBefore={(sourceId, targetId) => dispatch({
+            onDropAt={(sourceId, targetId, position) => dispatch({
               type: 'set-panel-order',
-              order: reorderWorkspacePanels(state.workspaceLayout, sourceId, targetId).order,
+              order: placeWorkspacePanel(state.workspaceLayout, sourceId, targetId, position).order,
+            })}
+            onMove={(panelId, delta) => dispatch({
+              type: 'set-panel-order',
+              order: moveWorkspacePanel(state.workspaceLayout, panelId, delta).order,
             })}
             onResize={(panelId, patch) => dispatch({ type: 'resize-panel', id: panelId, patch })}
           >

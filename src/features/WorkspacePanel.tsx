@@ -17,7 +17,8 @@ interface WorkspacePanelProps {
   id: WorkspacePanelId;
   titleId: string;
   size: WorkspacePanelSize;
-  onDropBefore: (sourceId: WorkspacePanelId, targetId: WorkspacePanelId) => void;
+  onDropAt: (sourceId: WorkspacePanelId, targetId: WorkspacePanelId, position: 'before' | 'after') => void;
+  onMove: (id: WorkspacePanelId, delta: -1 | 1) => void;
   onResize: (id: WorkspacePanelId, patch: Partial<WorkspacePanelSize>) => void;
   children: ReactNode;
   className?: string;
@@ -35,10 +36,10 @@ interface ActiveDrag {
   pointerId: number;
   startX: number;
   startY: number;
-  lastTargetId: WorkspacePanelId | null;
+  lastTarget: string | null;
 }
 
-export default function WorkspacePanel({ id, titleId, size, onDropBefore, onResize, children, className }: WorkspacePanelProps) {
+export default function WorkspacePanel({ id, titleId, size, onDropAt, onMove, onResize, children, className }: WorkspacePanelProps) {
   const resizeRef = useRef<ActiveResize | null>(null);
   const dragRef = useRef<ActiveDrag | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -46,6 +47,7 @@ export default function WorkspacePanel({ id, titleId, size, onDropBefore, onResi
   const styles = {
     '--panel-width': `${size.widthPx}px`,
     '--panel-height': `${size.heightPx}px`,
+    '--panel-zoom': size.zoom,
   } as CSSProperties;
 
   const emitResize = (axis: ResizeAxis, nextWidth: number, nextHeight: number) => {
@@ -103,13 +105,13 @@ export default function WorkspacePanel({ id, titleId, size, onDropBefore, onResi
   };
 
   const startTitleDrag = (event: PointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || !(event.target as HTMLElement).closest('[data-panel-drag-handle]')) return;
+    if (isNarrowViewport() || event.button !== 0 || !(event.target as HTMLElement).closest('[data-panel-drag-handle]')) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      lastTargetId: null,
+      lastTarget: null,
     };
   };
 
@@ -121,9 +123,13 @@ export default function WorkspacePanel({ id, titleId, size, onDropBefore, onResi
     const targetPanel = document.elementFromPoint(event.clientX, event.clientY)
       ?.closest('[data-workspace-panel-id]') as HTMLElement | null;
     const targetId = targetPanel?.dataset.workspacePanelId as WorkspacePanelId | undefined;
-    if (!targetId || targetId === id || targetId === active.lastTargetId) return;
-    active.lastTargetId = targetId;
-    onDropBefore(id, targetId);
+    if (!targetPanel || !targetId || targetId === id) return;
+    const bounds = targetPanel.getBoundingClientRect();
+    const position = event.clientX >= bounds.left + bounds.width / 2 ? 'after' : 'before';
+    const targetKey = `${targetId}:${position}`;
+    if (targetKey === active.lastTarget) return;
+    active.lastTarget = targetKey;
+    onDropAt(id, targetId, position);
   };
 
   const finishTitleDrag = (event: PointerEvent<HTMLElement>) => {
@@ -146,12 +152,22 @@ export default function WorkspacePanel({ id, titleId, size, onDropBefore, onResi
       onPointerUp={finishTitleDrag}
       onPointerCancel={finishTitleDrag}
     >
+      <div className="panel-zoom-controls" aria-label={`${title}板块显示设置`}>
+        <button type="button" aria-label={`向前移动${title}板块`} onClick={() => onMove(id, -1)}>←</button>
+        <button type="button" aria-label={`向后移动${title}板块`} onClick={() => onMove(id, 1)}>→</button>
+        <button type="button" aria-label={`缩小${title}板块`} onClick={() => onResize(id, { zoom: size.zoom - .1 })}>−</button>
+        <output aria-label={`${title}板块缩放比例`}>{Math.round(size.zoom * 100)}%</output>
+        <button type="button" aria-label={`放大${title}板块`} onClick={() => onResize(id, { zoom: size.zoom + .1 })}>＋</button>
+      </div>
       <div className="workspace-panel-body">{children}</div>
       <span
         role="separator"
         tabIndex={0}
         aria-label={`调整${title}宽度`}
         aria-orientation="vertical"
+        aria-valuemin={220}
+        aria-valuemax={900}
+        aria-valuenow={size.widthPx}
         className="panel-resizer panel-resizer-x"
         onPointerDown={startResize('x')}
         onPointerMove={continueResize}
@@ -164,6 +180,9 @@ export default function WorkspacePanel({ id, titleId, size, onDropBefore, onResi
         tabIndex={0}
         aria-label={`调整${title}高度`}
         aria-orientation="horizontal"
+        aria-valuemin={320}
+        aria-valuemax={1200}
+        aria-valuenow={size.heightPx}
         className="panel-resizer panel-resizer-y"
         onPointerDown={startResize('y')}
         onPointerMove={continueResize}
@@ -172,15 +191,12 @@ export default function WorkspacePanel({ id, titleId, size, onDropBefore, onResi
         onKeyDown={resizeWithKeyboard('y')}
       />
       <span
-        role="separator"
-        tabIndex={0}
-        aria-label={`调整${title}板块大小`}
+        aria-hidden="true"
         className="panel-resizer panel-resizer-corner"
         onPointerDown={startResize('corner')}
         onPointerMove={continueResize}
         onPointerUp={finishResize}
         onPointerCancel={finishResize}
-        onKeyDown={resizeWithKeyboard('corner')}
       />
     </section>
   );

@@ -74,6 +74,7 @@ export type DraftAction =
   | { type: 'remember-size'; preset: SizePreset }
   | { type: 'set-panel-order'; order: WorkspacePanelId[] }
   | { type: 'resize-panel'; id: WorkspacePanelId; patch: Partial<WorkspacePanelSize> }
+  | { type: 'reset-workspace-layout' }
   | { type: 'clear-draft' };
 
 export function draftReducer(state: DraftState, action: DraftAction): DraftState {
@@ -216,6 +217,14 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
       return {
         ...state,
         workspaceLayout: resizeWorkspacePanel(state.workspaceLayout, action.id, action.patch),
+      };
+    case 'reset-workspace-layout':
+      return {
+        ...state,
+        workspaceLayout: {
+          order: [...DEFAULT_WORKSPACE_LAYOUT.order],
+          sizes: Object.fromEntries(Object.entries(DEFAULT_WORKSPACE_LAYOUT.sizes).map(([id, size]) => [id, { ...size }])) as WorkspaceLayout['sizes'],
+        },
       };
     case 'clear-draft':
       return createInitialDraft();

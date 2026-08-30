@@ -76,10 +76,26 @@ export function loadDraft(storage: DraftReader): DraftState | null {
   }
 }
 
+export function recoverDraft(getStorage: () => DraftReader): DraftState {
+  try {
+    return loadDraft(getStorage()) ?? createInitialDraft();
+  } catch {
+    return createInitialDraft();
+  }
+}
+
 export function saveDraft(storage: DraftWriter, state: DraftState): boolean {
   try {
     storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(state));
     return true;
+  } catch {
+    return false;
+  }
+}
+
+export function saveDraftSafely(getStorage: () => DraftWriter, state: DraftState): boolean {
+  try {
+    return saveDraft(getStorage(), state);
   } catch {
     return false;
   }

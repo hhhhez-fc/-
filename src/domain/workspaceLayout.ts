@@ -5,6 +5,7 @@ export type WorkspacePanelId = typeof WORKSPACE_PANEL_IDS[number];
 export interface WorkspacePanelSize {
   widthPx: number;
   heightPx: number;
+  zoom: number;
 }
 
 export interface WorkspaceLayout {
@@ -15,10 +16,10 @@ export interface WorkspaceLayout {
 export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = {
   order: ['intake', 'preview', 'records', 'history'],
   sizes: {
-    intake: { widthPx: 360, heightPx: 640 },
-    preview: { widthPx: 640, heightPx: 760 },
-    records: { widthPx: 420, heightPx: 640 },
-    history: { widthPx: 420, heightPx: 640 },
+    intake: { widthPx: 360, heightPx: 640, zoom: 1 },
+    preview: { widthPx: 640, heightPx: 760, zoom: 1 },
+    records: { widthPx: 420, heightPx: 640, zoom: 1 },
+    history: { widthPx: 420, heightPx: 640, zoom: 1 },
   },
 };
 
@@ -46,6 +47,7 @@ export function hydrateWorkspaceLayout(value: unknown): WorkspaceLayout {
     return [id, {
       widthPx: clamp(finiteNumber(savedSize?.widthPx, defaultSize.widthPx), 220, 900),
       heightPx: clamp(finiteNumber(savedSize?.heightPx, defaultSize.heightPx), 320, 1200),
+      zoom: Math.round(clamp(finiteNumber(savedSize?.zoom, defaultSize.zoom), .75, 1.25) * 100) / 100,
     }];
   })) as Record<WorkspacePanelId, WorkspacePanelSize>;
 
@@ -67,6 +69,35 @@ export function reorderWorkspacePanels(
   return { ...layout, order };
 }
 
+export function placeWorkspacePanel(
+  layout: WorkspaceLayout,
+  sourceId: WorkspacePanelId,
+  targetId: WorkspacePanelId,
+  position: 'before' | 'after',
+): WorkspaceLayout {
+  if (sourceId === targetId) return { ...layout, order: [...layout.order] };
+  const order = layout.order.filter((id) => id !== sourceId);
+  const targetIndex = order.indexOf(targetId);
+  if (targetIndex < 0 || !layout.order.includes(sourceId)) return { ...layout, order: [...layout.order] };
+  order.splice(targetIndex + (position === 'after' ? 1 : 0), 0, sourceId);
+  return { ...layout, order };
+}
+
+export function moveWorkspacePanel(
+  layout: WorkspaceLayout,
+  id: WorkspacePanelId,
+  delta: -1 | 1,
+): WorkspaceLayout {
+  const sourceIndex = layout.order.indexOf(id);
+  const targetIndex = sourceIndex + delta;
+  if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= layout.order.length) {
+    return { ...layout, order: [...layout.order] };
+  }
+  const order = [...layout.order];
+  [order[sourceIndex], order[targetIndex]] = [order[targetIndex], order[sourceIndex]];
+  return { ...layout, order };
+}
+
 export function resizeWorkspacePanel(
   layout: WorkspaceLayout,
   id: WorkspacePanelId,
@@ -80,6 +111,7 @@ export function resizeWorkspacePanel(
       [id]: {
         widthPx: clamp(patch.widthPx ?? current.widthPx, 220, 900),
         heightPx: clamp(patch.heightPx ?? current.heightPx, 320, 1200),
+        zoom: Math.round(clamp(patch.zoom ?? current.zoom, .75, 1.25) * 100) / 100,
       },
     },
   };

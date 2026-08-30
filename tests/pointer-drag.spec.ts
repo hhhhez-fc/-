@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePointerDragUpdate } from '../src/domain/pointerDrag';
+import { didPointerMove, resolvePointerDragUpdate } from '../src/domain/pointerDrag';
 import * as pointerDragDomain from '../src/domain/pointerDrag';
 
 describe('预览文字拖动', () => {
@@ -16,6 +16,8 @@ describe('预览文字拖动', () => {
 
   it('单击或轻微抖动只选中文字，不产生位置更新', () => {
     expect(resolvePointerDragUpdate(start, { clientX: 102, clientY: 52 }, { width: 200, height: 100 })).toBeNull();
+    expect(didPointerMove(start, { clientX: 102, clientY: 52 })).toBe(false);
+    expect(didPointerMove(start, { clientX: 105, clientY: 50 })).toBe(true);
   });
 
   it('超过拖动阈值后按起始位置计算新位置', () => {

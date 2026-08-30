@@ -3,6 +3,15 @@ import type { TextPlacement } from './labels';
 
 const DRAG_THRESHOLD_PX = 4;
 
+export function didPointerMove(
+  start: { clientX: number; clientY: number },
+  current: { clientX: number; clientY: number },
+): boolean {
+  const deltaX = current.clientX - start.clientX;
+  const deltaY = current.clientY - start.clientY;
+  return (deltaX * deltaX) + (deltaY * deltaY) >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
+}
+
 export interface PointerDragStart {
   clientX: number;
   clientY: number;
@@ -39,7 +48,7 @@ export function resolvePointerDragUpdate(
 ): TextPlacement | null {
   const deltaX = current.clientX - start.clientX;
   const deltaY = current.clientY - start.clientY;
-  if ((deltaX * deltaX) + (deltaY * deltaY) < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return null;
+  if (!didPointerMove(start, current)) return null;
   if (!bounds.width || !bounds.height) return null;
   return resolvePlacement(
     start.placement.xPercent + (deltaX / bounds.width) * 100,

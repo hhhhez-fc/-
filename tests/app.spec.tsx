@@ -30,6 +30,12 @@ describe('唛头打印工作台', () => {
     expect(html.match(/data-testid="panel-drag-handle"/g)).toHaveLength(4);
     expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*宽度"/g)).toHaveLength(4);
     expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*高度"/g)).toHaveLength(4);
+    expect(html.match(/板块缩放比例/g)).toHaveLength(4);
+    expect(html.match(/向前移动[^\"]*板块/g)).toHaveLength(4);
+    expect(html.match(/向后移动[^\"]*板块/g)).toHaveLength(4);
+    expect(html).not.toContain(' draggable=');
+    expect(html.match(/aria-valuenow=/g)).toHaveLength(8);
+    expect(html).toContain('恢复默认布局');
   });
 });
 
@@ -197,6 +203,8 @@ describe('逐行预览', () => {
 
     expect(html).toContain('拖动内容打印区域');
     expect(html.match(/调整打印区域/g)).toHaveLength(8);
+    expect(html).toContain('本行恢复正中');
+    expect(html).toContain('layout-status-action');
   });
 });
 
@@ -212,17 +220,16 @@ describe('右侧样式设置', () => {
       recentSizes={[]}
       onUseRecent={() => undefined}
       onRememberSize={() => undefined}
-      activeLine={label.textLines[0]}
-      onLineChange={() => undefined}
     />);
 
     expect(html).toContain('全部文字样式');
     expect(html).toContain('<span>全部字体</span>');
-    expect(html).toContain('<span>全部字号（pt）</span>');
+    expect(html).toContain('<span>全部字号</span>');
     expect(html).not.toContain('字号模式');
     expect(html).toContain('<span>自动排列方式</span>');
+    expect(html).toContain('选择即应用');
     expect(html).toContain('保持当前左右位置');
-    expect(html).toContain('全部自动排列');
+    expect(html).not.toContain('全部自动排列');
     expect(html).toContain('<summary>');
     expect(html).toContain('尺寸与打印区域');
     expect(html).toContain('<span>行距</span>');
@@ -230,6 +237,7 @@ describe('右侧样式设置', () => {
     expect(html).not.toContain('<span>水平对齐</span>');
     expect(html).not.toContain('<span>垂直对齐</span>');
     expect(html).not.toContain('<span>边框粗细（mm）</span>');
+    expect(html).not.toContain('placement-control');
   });
 
   it('当前行和选中文字样式说明修改后立即生效，不再需要应用按钮', () => {
@@ -239,7 +247,7 @@ describe('右侧样式设置', () => {
       activeLineId={label.textLines[0].id}
       onActiveLineChange={() => undefined}
       onChange={() => undefined}
-      onReview={() => undefined}
+      onPrintPreview={() => undefined}
       reviewErrors={[]}
       onDuplicate={() => undefined}
       onDelete={() => undefined}
@@ -248,6 +256,8 @@ describe('右侧样式设置', () => {
     expect(html).toContain('修改后立即生效');
     expect(html).not.toContain('应用到第');
     expect(html).not.toContain('应用到选中文字');
+    expect(html).toContain('打印预览');
+    expect(html).not.toContain('确认校对完成');
   });
 
   it('提供毫米数值输入和恢复默认作为拖动替代操作', () => {
@@ -261,8 +271,6 @@ describe('右侧样式设置', () => {
       recentSizes={[]}
       onUseRecent={() => undefined}
       onRememberSize={() => undefined}
-      activeLine={label.textLines[0]}
-      onLineChange={() => undefined}
     />);
 
     expect(html).toContain('内容打印区域（mm）');

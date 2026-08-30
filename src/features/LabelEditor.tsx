@@ -9,13 +9,13 @@ interface LabelEditorProps {
   activeLineId: string | null;
   onActiveLineChange: (id: string) => void;
   onChange: (patch: Partial<LabelRecord>) => void;
-  onReview: () => void;
+  onPrintPreview: () => void;
   reviewErrors: string[];
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-export default function LabelEditor({ label, activeLineId, onActiveLineChange, onChange, onReview, reviewErrors, onDuplicate, onDelete }: LabelEditorProps) {
+export default function LabelEditor({ label, activeLineId, onActiveLineChange, onChange, onPrintPreview, reviewErrors, onDuplicate, onDelete }: LabelEditorProps) {
   const contentError = !label.content.trim() ? '请输入需要打印的唛头内容。' : '';
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const activeLine = label.textLines.find((line) => line.id === activeLineId) ?? label.textLines[0];
@@ -68,7 +68,7 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
         <span>{label.purpose === 'envelope' ? '信封' : '外箱'}</span>
       </div>
       {label.reviewReason && <p className="review-reason">{label.reviewReason}</p>}
-      {label.needsReview && reviewErrors.length > 0 && <p className="review-errors">确认前请处理：{reviewErrors.join('；')}</p>}
+      {reviewErrors.length > 0 && <p className="review-errors">打印前请处理：{reviewErrors.join('；')}</p>}
       <label className="field">
         <span>唛头内容</span>
         <textarea
@@ -149,10 +149,10 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
         <button
           className="button button-primary"
           type="button"
-          disabled={!label.needsReview || reviewErrors.length > 0}
-          onClick={onReview}
+          disabled={reviewErrors.length > 0}
+          onClick={onPrintPreview}
         >
-          {label.needsReview ? '确认校对完成' : '已完成校对'}
+          打印预览
         </button>
         <button className="button button-quiet" type="button" onClick={onDuplicate}>复制</button>
         <button className="button button-quiet" type="button" onClick={onDelete}>删除</button>
