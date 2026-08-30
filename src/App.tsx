@@ -14,7 +14,12 @@ import PrintPages from './features/PrintPages';
 import { createPrintPlan, type PrintGroup } from './domain/printing';
 import { validateLabelForPrint } from './domain/layout';
 import { validateSizePreset } from './domain/labels';
-import { moveWorkspacePanel, placeWorkspacePanel, type WorkspacePanelId } from './domain/workspaceLayout';
+import {
+  moveWorkspacePanel,
+  placeWorkspacePanel,
+  type WorkspacePanelDropTarget,
+  type WorkspacePanelId,
+} from './domain/workspaceLayout';
 import WorkspacePanel from './features/WorkspacePanel';
 
 interface AppProps {
@@ -35,6 +40,7 @@ export default function App({ initialState }: AppProps) {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const [panelDropTarget, setPanelDropTarget] = useState<WorkspacePanelDropTarget | null>(null);
   const saveFailureRef = useRef(false);
   const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
     event.preventDefault();
@@ -374,10 +380,12 @@ export default function App({ initialState }: AppProps) {
             titleId={panelTitleIds[id]}
             size={state.workspaceLayout.sizes[id]}
             className={`${id}-panel`}
+            dropPosition={panelDropTarget?.targetId === id ? panelDropTarget.position : undefined}
             onDropAt={(sourceId, targetId, position) => dispatch({
               type: 'set-panel-order',
               order: placeWorkspacePanel(state.workspaceLayout, sourceId, targetId, position).order,
             })}
+            onDragPreview={setPanelDropTarget}
             onMove={(panelId, delta) => dispatch({
               type: 'set-panel-order',
               order: moveWorkspacePanel(state.workspaceLayout, panelId, delta).order,

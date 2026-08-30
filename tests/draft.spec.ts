@@ -70,12 +70,32 @@ describe('草稿状态', () => {
     });
   });
 
+  it('用户主动设置为旧默认数值的宽度在换位和重新加载后仍保留', () => {
+    const resized = draftReducer(createInitialDraft(), {
+      type: 'resize-panel',
+      id: 'intake',
+      patch: { widthPx: 360 },
+    });
+    const reordered = draftReducer(resized, {
+      type: 'set-panel-order',
+      order: ['preview', 'intake', 'records'],
+    });
+    const storage = new Map<string, string>();
+
+    saveDraft({ setItem: (key, value) => storage.set(key, value) }, reordered);
+    const reloaded = loadDraft({ getItem: (key) => storage.get(key) ?? null });
+
+    expect(reordered.workspaceLayout.sizes.intake.widthPx).toBe(360);
+    expect(reloaded?.workspaceLayout.sizes.intake.widthPx).toBe(360);
+  });
+
   it('只恢复默认工作区布局而保留当前唛头', () => {
     const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false });
     const state = {
       ...createInitialDraft(),
       labels: [label],
       workspaceLayout: {
+        version: 2 as const,
         order: ['records', 'preview', 'intake'] as DraftState['workspaceLayout']['order'],
         sizes: {
           ...createInitialDraft().workspaceLayout.sizes,

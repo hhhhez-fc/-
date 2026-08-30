@@ -31,6 +31,7 @@ describe('唛头打印工作台', () => {
     expect(html.match(/data-testid="panel-drag-handle"/g)).toHaveLength(3);
     expect(html.match(/class="[^"]*panel-drag-handle[^"]*"/g)).toHaveLength(3);
     expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*宽度"/g)).toHaveLength(3);
+    expect(html.match(/aria-valuemin="180"/g)).toHaveLength(3);
     expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*高度"/g)).toHaveLength(3);
     expect(html).not.toContain('板块缩放比例');
     expect(html).not.toContain('向前移动');

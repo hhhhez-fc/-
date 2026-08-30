@@ -8,16 +8,37 @@ export interface WorkspacePanelSize {
 }
 
 export interface WorkspaceLayout {
+  version: 2;
   order: WorkspacePanelId[];
   sizes: Record<WorkspacePanelId, WorkspacePanelSize>;
 }
 
+export interface WorkspacePanelInlineRect {
+  id: WorkspacePanelId;
+  left: number;
+  width: number;
+}
+
+export interface WorkspacePanelDropTarget {
+  targetId: WorkspacePanelId;
+  position: 'before' | 'after';
+}
+
+export const WORKSPACE_PANEL_MIN_WIDTH = 180;
+
+const LEGACY_DEFAULT_PANEL_WIDTHS: Record<WorkspacePanelId, number> = {
+  intake: 360,
+  preview: 640,
+  records: 420,
+};
+
 export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = {
+  version: 2,
   order: ['intake', 'preview', 'records'],
   sizes: {
-    intake: { widthPx: 360, heightPx: 640 },
-    preview: { widthPx: 640, heightPx: 760 },
-    records: { widthPx: 420, heightPx: 640 },
+    intake: { widthPx: 300, heightPx: 640 },
+    preview: { widthPx: 540, heightPx: 760 },
+    records: { widthPx: 340, heightPx: 640 },
   },
 };
 
@@ -29,6 +50,33 @@ export function workspacePanelKeyboardMove(key: string): -1 | 1 | null {
   if (key === 'ArrowLeft') return -1;
   if (key === 'ArrowRight') return 1;
   return null;
+}
+
+export function workspacePanelDragHasStarted(wasStarted: boolean, deltaX: number, deltaY: number): boolean {
+  return wasStarted || Math.hypot(deltaX, deltaY) >= 4;
+}
+
+export function workspacePanelAutoScrollDirection(
+  pointerX: number,
+  workspaceLeft: number,
+  workspaceRight: number,
+  edgeSize = 48,
+): -1 | 0 | 1 {
+  if (pointerX < workspaceLeft + edgeSize) return -1;
+  if (pointerX > workspaceRight - edgeSize) return 1;
+  return 0;
+}
+
+export function findWorkspacePanelDropTarget(
+  sourceId: WorkspacePanelId,
+  pointerX: number,
+  panels: WorkspacePanelInlineRect[],
+): WorkspacePanelDropTarget | null {
+  const candidates = panels.filter((panel) => panel.id !== sourceId);
+  if (candidates.length === 0) return null;
+  const target = candidates.find((panel) => pointerX < panel.left + panel.width / 2);
+  if (target) return { targetId: target.id, position: 'before' };
+  return { targetId: candidates[candidates.length - 1].id, position: 'after' };
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -43,6 +91,7 @@ function finiteNumber(value: unknown, fallback: number): number {
 
 export function hydrateWorkspaceLayout(value: unknown): WorkspaceLayout {
   const candidate = value && typeof value === 'object' ? value as Partial<WorkspaceLayout> : {};
+  const migrateLegacyDefaults = candidate.version !== 2;
   const savedOrder = Array.isArray(candidate.order) ? candidate.order : [];
   const order = [
     ...savedOrder.filter(isWorkspacePanelId).filter((id, index, entries) => entries.indexOf(id) === index),
@@ -52,13 +101,18 @@ export function hydrateWorkspaceLayout(value: unknown): WorkspaceLayout {
   const sizes = Object.fromEntries(WORKSPACE_PANEL_IDS.map((id) => {
     const defaultSize = DEFAULT_WORKSPACE_LAYOUT.sizes[id];
     const savedSize = (savedSizes as Partial<Record<WorkspacePanelId, Partial<WorkspacePanelSize>>>)[id];
+    const savedWidth = finiteNumber(savedSize?.widthPx, defaultSize.widthPx);
     return [id, {
-      widthPx: clamp(finiteNumber(savedSize?.widthPx, defaultSize.widthPx), 220, 900),
+      widthPx: clamp(
+        migrateLegacyDefaults && savedWidth === LEGACY_DEFAULT_PANEL_WIDTHS[id] ? defaultSize.widthPx : savedWidth,
+        WORKSPACE_PANEL_MIN_WIDTH,
+        900,
+      ),
       heightPx: clamp(finiteNumber(savedSize?.heightPx, defaultSize.heightPx), 320, 1200),
     }];
   })) as Record<WorkspacePanelId, WorkspacePanelSize>;
 
-  return { order, sizes };
+  return { version: 2, order, sizes };
 }
 
 export function reorderWorkspacePanels(
@@ -116,7 +170,7 @@ export function resizeWorkspacePanel(
     sizes: {
       ...layout.sizes,
       [id]: {
-        widthPx: clamp(patch.widthPx ?? current.widthPx, 220, 900),
+        widthPx: clamp(patch.widthPx ?? current.widthPx, WORKSPACE_PANEL_MIN_WIDTH, 900),
         heightPx: clamp(patch.heightPx ?? current.heightPx, 320, 1200),
       },
     },
