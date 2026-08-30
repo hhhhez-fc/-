@@ -1,15 +1,19 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import type { WorkspacePanelId, WorkspacePanelSize } from '../domain/workspaceLayout';
+import {
+  canPointerReorderWorkspacePanels,
+  workspacePanelKeyboardMove,
+  type WorkspacePanelId,
+  type WorkspacePanelSize,
+} from '../domain/workspaceLayout';
 
 const PANEL_TITLES: Record<WorkspacePanelId, string> = {
   intake: '录入来源',
   preview: '尺寸与预览',
   records: '校对清单',
-  history: '使用过的唛头',
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-const isNarrowViewport = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches;
+const isNarrowViewport = () => typeof window !== 'undefined' && !canPointerReorderWorkspacePanels(window.innerWidth);
 
 type ResizeAxis = 'x' | 'y' | 'corner';
 
@@ -47,7 +51,6 @@ export default function WorkspacePanel({ id, titleId, size, onDropAt, onMove, on
   const styles = {
     '--panel-width': `${size.widthPx}px`,
     '--panel-height': `${size.heightPx}px`,
-    '--panel-zoom': size.zoom,
   } as CSSProperties;
 
   const emitResize = (axis: ResizeAxis, nextWidth: number, nextHeight: number) => {
@@ -139,6 +142,14 @@ export default function WorkspacePanel({ id, titleId, size, onDropAt, onMove, on
     setIsDragging(false);
   };
 
+  const moveTitleWithKeyboard = (event: KeyboardEvent<HTMLElement>) => {
+    if (!(event.target as HTMLElement).closest('[data-panel-drag-handle]')) return;
+    const delta = workspacePanelKeyboardMove(event.key);
+    if (delta === null) return;
+    event.preventDefault();
+    onMove(id, delta);
+  };
+
   return (
     <section
       className={`panel workspace-panel ${className ?? ''}`.trim()}
@@ -151,14 +162,8 @@ export default function WorkspacePanel({ id, titleId, size, onDropAt, onMove, on
       onPointerMove={continueTitleDrag}
       onPointerUp={finishTitleDrag}
       onPointerCancel={finishTitleDrag}
+      onKeyDown={moveTitleWithKeyboard}
     >
-      <div className="panel-zoom-controls" aria-label={`${title}板块显示设置`}>
-        <button type="button" aria-label={`向前移动${title}板块`} onClick={() => onMove(id, -1)}>←</button>
-        <button type="button" aria-label={`向后移动${title}板块`} onClick={() => onMove(id, 1)}>→</button>
-        <button type="button" aria-label={`缩小${title}板块`} onClick={() => onResize(id, { zoom: size.zoom - .1 })}>−</button>
-        <output aria-label={`${title}板块缩放比例`}>{Math.round(size.zoom * 100)}%</output>
-        <button type="button" aria-label={`放大${title}板块`} onClick={() => onResize(id, { zoom: size.zoom + .1 })}>＋</button>
-      </div>
       <div className="workspace-panel-body">{children}</div>
       <span
         role="separator"

@@ -56,17 +56,17 @@ describe('草稿状态', () => {
   it('保存面板顺序并限制面板尺寸', () => {
     const reordered = draftReducer(createInitialDraft(), {
       type: 'set-panel-order',
-      order: ['history', 'preview', 'intake', 'records'],
+      order: ['records', 'preview', 'intake'],
     });
     const resized = draftReducer(reordered, {
       type: 'resize-panel',
-      id: 'history',
+      id: 'records',
       patch: { widthPx: 1000, heightPx: 100 },
     });
 
     expect(resized.workspaceLayout).toMatchObject({
-      order: ['history', 'preview', 'intake', 'records'],
-      sizes: { history: { widthPx: 900, heightPx: 320 } },
+      order: ['records', 'preview', 'intake'],
+      sizes: { records: { widthPx: 900, heightPx: 320 } },
     });
   });
 
@@ -76,10 +76,10 @@ describe('草稿状态', () => {
       ...createInitialDraft(),
       labels: [label],
       workspaceLayout: {
-        order: ['history', 'preview', 'intake', 'records'] as DraftState['workspaceLayout']['order'],
+        order: ['records', 'preview', 'intake'] as DraftState['workspaceLayout']['order'],
         sizes: {
           ...createInitialDraft().workspaceLayout.sizes,
-          preview: { widthPx: 800, heightPx: 900, zoom: 1.25 },
+          preview: { widthPx: 800, heightPx: 900 },
         },
       },
     };
@@ -217,11 +217,31 @@ describe('本地草稿存储', () => {
     expect(loadDraft(storage)).toMatchObject({ selectedLabelIds: [], business: '' });
   });
 
-  it('hydrates an old draft with the default four-panel layout', () => {
+  it('hydrates an old draft with the default three-panel layout', () => {
     const legacy = createInitialDraft() as Partial<DraftState>;
     delete legacy.workspaceLayout;
     const loaded = loadDraft({ getItem: () => JSON.stringify(legacy) });
-    expect(loaded?.workspaceLayout.order).toEqual(['intake', 'preview', 'records', 'history']);
+    expect(loaded?.workspaceLayout.order).toEqual(['intake', 'preview', 'records']);
+  });
+
+  it('读取旧四板块草稿时移除历史板块并保留其余顺序与尺寸', () => {
+    const legacy = {
+      ...createInitialDraft(),
+      workspaceLayout: {
+        order: ['history', 'records', 'intake', 'preview'],
+        sizes: {
+          ...createInitialDraft().workspaceLayout.sizes,
+          history: { widthPx: 540, heightPx: 500, zoom: 1.1 },
+          records: { widthPx: 520, heightPx: 700, zoom: .9 },
+        },
+      },
+    };
+
+    const loaded = loadDraft({ getItem: () => JSON.stringify(legacy) });
+
+    expect(loaded?.workspaceLayout.order).toEqual(['records', 'intake', 'preview']);
+    expect(loaded?.workspaceLayout.sizes.records).toEqual({ widthPx: 520, heightPx: 700 });
+    expect(loaded?.workspaceLayout.sizes).not.toHaveProperty('history');
   });
 
   it('读取旧草稿时把隐藏的自动字号迁移为可直接编辑的固定字号', () => {

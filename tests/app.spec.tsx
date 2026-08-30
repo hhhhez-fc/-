@@ -22,19 +22,22 @@ describe('唛头打印工作台', () => {
     expect(html).toContain('还没有唛头');
   });
 
-  it('将四个工作区板块暴露为可拖动、可调整大小的区域', () => {
+  it('将三个工作区板块暴露为可拖动、边缘可调整大小的区域，并把历史并入来源', () => {
     const html = renderToStaticMarkup(<App initialState={createInitialDraft()} />);
 
-    expect(html).toContain('aria-labelledby="history-title"');
+    expect(html).not.toContain('aria-labelledby="history-title"');
     expect(html).toContain('使用过的唛头');
-    expect(html.match(/data-testid="panel-drag-handle"/g)).toHaveLength(4);
-    expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*宽度"/g)).toHaveLength(4);
-    expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*高度"/g)).toHaveLength(4);
-    expect(html.match(/板块缩放比例/g)).toHaveLength(4);
-    expect(html.match(/向前移动[^\"]*板块/g)).toHaveLength(4);
-    expect(html.match(/向后移动[^\"]*板块/g)).toHaveLength(4);
+    expect(html).toContain('最近使用的唛头会保存在录入来源中');
+    expect(html.match(/data-testid="panel-drag-handle"/g)).toHaveLength(3);
+    expect(html.match(/class="[^"]*panel-drag-handle[^"]*"/g)).toHaveLength(3);
+    expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*宽度"/g)).toHaveLength(3);
+    expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*高度"/g)).toHaveLength(3);
+    expect(html).not.toContain('板块缩放比例');
+    expect(html).not.toContain('向前移动');
+    expect(html).not.toContain('向后移动');
+    expect(html.match(/role="group"[^>]*aria-roledescription="可拖动板块"[^>]*tabindex="0"[^>]*data-panel-drag-handle/g)).toHaveLength(3);
     expect(html).not.toContain(' draggable=');
-    expect(html.match(/aria-valuenow=/g)).toHaveLength(8);
+    expect(html.match(/aria-valuenow=/g)).toHaveLength(6);
     expect(html).toContain('恢复默认布局');
   });
 });

@@ -155,7 +155,7 @@ export default function App({ initialState }: AppProps) {
   };
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
     intake: <>
-      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动录入来源板块">
+      <div className="panel-heading panel-drag-handle" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动录入来源板块；左右方向键换位">
         <span className="step-number">01</span>
         <div>
           <h2 id="intake-title">录入来源</h2>
@@ -208,9 +208,20 @@ export default function App({ initialState }: AppProps) {
         <strong>文件不会上传</strong>
         <span>Excel、图片识别和草稿保存都在当前浏览器中完成。</span>
       </aside>
+
+      <section className="source-history" aria-labelledby="source-history-title">
+        <div>
+          <h3 id="source-history-title">使用过的唛头</h3>
+          <p>最近使用的唛头会保存在录入来源中。</p>
+        </div>
+        <div className="source-history-empty">
+          <strong>暂时没有使用记录</strong>
+          <span>完成打印后，这里会显示最近使用的唛头。</span>
+        </div>
+      </section>
     </>,
     records: <>
-      <div className="panel-heading records-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动校对清单板块">
+      <div className="panel-heading panel-drag-handle records-heading" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动校对清单板块；左右方向键换位">
         <span className="step-number">02</span>
         <div>
           <h2 id="records-title">校对清单</h2>
@@ -272,7 +283,7 @@ export default function App({ initialState }: AppProps) {
       )}
     </>,
     preview: <>
-      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动尺寸与预览板块">
+      <div className="panel-heading panel-drag-handle" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动尺寸与预览板块；左右方向键换位">
         <span className="step-number">03</span>
         <div>
           <h2 id="preview-title">尺寸与预览</h2>
@@ -307,25 +318,11 @@ export default function App({ initialState }: AppProps) {
         </div>
       )}
     </>,
-    history: <>
-      <div className="panel-heading" data-testid="panel-drag-handle" data-panel-drag-handle aria-label="拖动使用过的唛头板块">
-        <span className="step-number">04</span>
-        <div>
-          <h2 id="history-title">使用过的唛头</h2>
-          <p>最近使用的唛头会显示在这里。</p>
-        </div>
-      </div>
-      <div className="history-empty">
-        <strong>暂时没有使用记录</strong>
-        <span>完成打印后，历史唛头会保存在这个板块。</span>
-      </div>
-    </>,
   };
   const panelTitleIds: Record<WorkspacePanelId, string> = {
     intake: 'intake-title',
     records: 'records-title',
     preview: 'preview-title',
-    history: 'history-title',
   };
 
   return (
