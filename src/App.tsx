@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { createInitialDraft, draftReducer, type DraftState } from './domain/draft';
+import { createInitialDraft, draftReducer, resolveDefaultNewLabelPreset, type DraftState } from './domain/draft';
 import { createLabel, defaultSizeTypeForBusiness, type LabelPurpose } from './domain/labels';
 import { recoverDraft, saveDraftSafely } from './domain/storage';
 import LabelEditor from './features/LabelEditor';
@@ -21,6 +21,7 @@ import {
   type WorkspacePanelId,
 } from './domain/workspaceLayout';
 import WorkspacePanel from './features/WorkspacePanel';
+import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSizePreview';
 
 interface AppProps {
   initialState?: DraftState;
@@ -40,6 +41,7 @@ export default function App({ initialState }: AppProps) {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const [fontSizePreview, setFontSizePreview] = useState<null | { labelId: string; choice: FontSizeChoice }>(null);
   const [panelDropTarget, setPanelDropTarget] = useState<WorkspacePanelDropTarget | null>(null);
   const saveFailureRef = useRef(false);
   const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
@@ -51,6 +53,10 @@ export default function App({ initialState }: AppProps) {
     () => state.sizePresets.find((preset) => preset.id === activeLabel?.sizePresetId) ?? state.sizePresets[0],
     [activeLabel?.sizePresetId, state.sizePresets],
   );
+  const defaultNewLabelPreset = resolveDefaultNewLabelPreset(state);
+  const previewLabel = activeLabel && fontSizePreview?.labelId === activeLabel.id
+    ? buildFontSizePreviewLabel(activeLabel, fontSizePreview.choice)
+    : activeLabel;
   const printPlan = useMemo(() => createPrintPlan(state.labels, state.sizePresets), [state.labels, state.sizePresets]);
   const activeReviewErrors = activeLabel && activePreset
     ? [...validateSizePreset(activePreset), ...validateLabelForPrint({ ...activeLabel, needsReview: false }, activePreset)]
@@ -100,6 +106,9 @@ export default function App({ initialState }: AppProps) {
 
   const addManualLabel = () => {
     const sizeType = defaultSizeTypeForBusiness(state.business);
+    if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
+      dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
+    }
     const label = createLabel({
       content: '',
       quantity: 1,
@@ -108,7 +117,7 @@ export default function App({ initialState }: AppProps) {
       purpose: state.purpose,
       contentType: 'text',
       sizeType,
-      sizePresetId: sizeType,
+      sizePresetId: defaultNewLabelPreset.id,
       needsReview: true,
       reviewReason: '请填写唛头内容并完成校对',
     });
@@ -165,15 +174,25 @@ export default function App({ initialState }: AppProps) {
 
       <div className="source-actions" aria-label="选择录入方式">
         <ExcelImporter
-          sizePresetId={defaultSizeTypeForBusiness(state.business)}
+          sizePresetId={defaultNewLabelPreset.id}
           purpose={state.purpose}
-          onImport={(labels) => dispatch({ type: 'import-labels', labels })}
+          onImport={(labels) => {
+            if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
+              dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
+            }
+            dispatch({ type: 'import-labels', labels });
+          }}
           onStatus={setStatus}
         />
         <ImageImporter
-          sizePresetId={defaultSizeTypeForBusiness(state.business)}
+          sizePresetId={defaultNewLabelPreset.id}
           purpose={state.purpose}
-          onImport={(labels) => dispatch({ type: 'import-labels', labels })}
+          onImport={(labels) => {
+            if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
+              dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
+            }
+            dispatch({ type: 'import-labels', labels });
+          }}
           onStatus={setStatus}
         />
         <button className="button button-primary manual-add" type="button" onClick={addManualLabel}>
@@ -266,6 +285,13 @@ export default function App({ initialState }: AppProps) {
           <h2 id="preview-title">尺寸与预览</h2>
           <p>毫米尺寸与最终打印效果同步。</p>
         </div>
+        <button
+          className="button button-quiet button-compact preview-add-label"
+          type="button"
+          aria-label="在尺寸与预览中新增唛头"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={addManualLabel}
+        >新增唛头</button>
       </div>
       {activeLabel && activePreset ? (
         <>
@@ -274,9 +300,10 @@ export default function App({ initialState }: AppProps) {
             presets={state.sizePresets}
             onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
             onPresetChange={(id, patch) => dispatch({ type: 'update-size-preset', id, patch })}
+            onFontSizePreview={(choice) => setFontSizePreview(choice ? { labelId: activeLabel.id, choice } : null)}
           />
           <LabelPreview
-            label={activeLabel}
+            label={previewLabel ?? activeLabel}
             preset={activePreset}
             activeLineId={resolvedActiveLineId}
             onActiveLineChange={setActiveLineId}
@@ -314,7 +341,7 @@ export default function App({ initialState }: AppProps) {
               type="button"
               onClick={() => setConfirmation({
                 title: '清空当前草稿？',
-                message: `将删除 ${state.labels.length} 条唛头并恢复默认尺寸，此操作无法撤销。`,
+                message: `将删除 ${state.labels.length} 条唛头并新建一条空白唛头；最近打印尺寸会保留。此操作无法撤销。`,
                 confirmLabel: '清空草稿',
                 action: () => {
                   dispatch({ type: 'clear-draft' });
@@ -385,6 +412,7 @@ export default function App({ initialState }: AppProps) {
         closePrintDialog();
       }}
       onPrintGroup={(group) => {
+        dispatch({ type: 'remember-printed-size', widthMm: group.widthMm, heightMm: group.heightMm });
         setActivePrintGroup(group);
         setStatus(`正在打开 ${group.sizeLabel} 的打印设置；系统打印份数请保持 1`);
       }}

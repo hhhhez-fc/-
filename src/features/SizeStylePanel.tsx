@@ -1,15 +1,18 @@
 import { validateSizePreset, type LabelRecord, type LabelStyle, type SizePreset } from '../domain/labels';
 import { buildAllTextStylePatch, type AllTextStylePatch } from '../domain/richText';
 import { alignTextLines, type TextLineAlignment } from '../domain/textLines';
+import type { FontSizeChoice } from '../domain/fontSizePreview';
+import FontSizePicker from './FontSizePicker';
 
 interface SizeStylePanelProps {
   label: LabelRecord;
   presets: SizePreset[];
   onChange: (patch: Partial<LabelRecord>) => void;
   onPresetChange: (id: string, patch: Partial<Omit<SizePreset, 'id'>>) => void;
+  onFontSizePreview?: (choice: FontSizeChoice | null) => void;
 }
 
-export default function SizeStylePanel({ label, presets, onChange, onPresetChange }: SizeStylePanelProps) {
+export default function SizeStylePanel({ label, presets, onChange, onPresetChange, onFontSizePreview = () => undefined }: SizeStylePanelProps) {
   const patchStyle = (patch: Partial<LabelStyle>) => onChange({ style: { ...label.style, ...patch } });
   const patchAllTextStyle = (patch: AllTextStylePatch) => onChange(buildAllTextStylePatch(label, patch));
   const activePreset = presets.find((preset) => preset.id === label.sizePresetId) ?? presets[0];
@@ -29,15 +32,13 @@ export default function SizeStylePanel({ label, presets, onChange, onPresetChang
             <option value={'"Times New Roman", serif'}>Times New Roman</option>
             <option value={'Consolas, monospace'}>等宽字体</option>
           </select></label>
-          <label className="field"><span>全部字号</span><select
-            value={label.style.fontMode === 'auto' ? '' : String(label.style.fontSizePt)}
-            onChange={(event) => patchAllTextStyle(event.target.value
-              ? { fontMode: 'fixed', fontSizePt: Number(event.target.value) }
-              : { fontMode: 'auto' })}
-          >
-            <option value="">自动适配</option>
-            {[12, 16, 20, 24, 28, 32, 36, 42, 48, 56, 64, 72, 96, 120].map((size) => <option key={size} value={size}>{size} pt</option>)}
-          </select></label>
+          <label className="field"><span>全部字号</span><FontSizePicker
+            value={label.style.fontMode === 'auto'
+              ? { fontMode: 'auto' }
+              : { fontMode: 'fixed', fontSizePt: label.style.fontSizePt }}
+            onPreview={onFontSizePreview}
+            onCommit={(choice) => patchAllTextStyle(choice)}
+          /></label>
           <label className="field"><span>行距</span><select value={label.style.lineHeight} onChange={(event) => patchStyle({ lineHeight: Number(event.target.value) as LabelStyle['lineHeight'] })}>
             <option value="1.05">紧凑</option>
             <option value="1.2">标准</option>

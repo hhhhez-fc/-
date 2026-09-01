@@ -2,6 +2,7 @@ import {
   defaultSizePresets,
   defaultStyle,
   createLabel,
+  defaultSizeTypeForBusiness,
   type LabelPurpose,
   type LabelRecord,
   type LabelStyle,
@@ -26,6 +27,11 @@ export interface StylePreset {
   style: LabelStyle;
 }
 
+export interface LastPrintedSize {
+  widthMm: number;
+  heightMm: number;
+}
+
 export interface DraftState {
   version: 1;
   business: string;
@@ -36,10 +42,59 @@ export interface DraftState {
   activeLabelId: string | null;
   selectedLabelIds: string[];
   recentSizes: SizePreset[];
+  lastPrintedSize: LastPrintedSize | null;
   workspaceLayout: WorkspaceLayout;
 }
 
-export function createInitialDraft(): DraftState {
+export function normalizeLastPrintedSize(value: unknown): LastPrintedSize | null {
+  if (!value || typeof value !== 'object') return null;
+  const size = value as Partial<LastPrintedSize>;
+  return Number.isFinite(size.widthMm)
+    && Number.isFinite(size.heightMm)
+    && Number(size.widthMm) >= 20
+    && Number(size.widthMm) <= 300
+    && Number(size.heightMm) >= 15
+    && Number(size.heightMm) <= 300
+    ? { widthMm: Number(size.widthMm), heightMm: Number(size.heightMm) }
+    : null;
+}
+
+function lastPrintedPresetId(size: LastPrintedSize): string {
+  return `last-printed-${String(size.widthMm).replace('.', '_')}x${String(size.heightMm).replace('.', '_')}`;
+}
+
+export function resolveDefaultNewLabelPreset(
+  state: Pick<DraftState, 'business' | 'sizePresets' | 'lastPrintedSize'>,
+): SizePreset {
+  const fallbackId = defaultSizeTypeForBusiness(state.business);
+  const fallback = state.sizePresets.find((preset) => preset.id === fallbackId) ?? state.sizePresets[0];
+  const lastPrintedSize = normalizeLastPrintedSize(state.lastPrintedSize);
+  if (!lastPrintedSize) return fallback;
+  const existing = state.sizePresets.find((preset) => (
+    preset.widthMm === lastPrintedSize.widthMm
+    && preset.heightMm === lastPrintedSize.heightMm
+  ));
+  return existing ?? {
+    ...fallback,
+    id: lastPrintedPresetId(lastPrintedSize),
+    name: `上次打印尺寸 ${lastPrintedSize.widthMm} × ${lastPrintedSize.heightMm} mm`,
+    widthMm: lastPrintedSize.widthMm,
+    heightMm: lastPrintedSize.heightMm,
+  };
+}
+
+export function createInitialDraft(lastPrintedSize: LastPrintedSize | null = null): DraftState {
+  const normalizedLastPrintedSize = normalizeLastPrintedSize(lastPrintedSize);
+  const basePresets = defaultSizePresets.map((preset) => ({ ...preset }));
+  const draftSeed = {
+    business: '',
+    sizePresets: basePresets,
+    lastPrintedSize: normalizedLastPrintedSize,
+  };
+  const initialPreset = resolveDefaultNewLabelPreset(draftSeed);
+  const sizePresets = basePresets.some((preset) => preset.id === initialPreset.id)
+    ? basePresets
+    : [...basePresets, initialPreset];
   const blankLabel = createLabel({
     content: '',
     quantity: 1,
@@ -48,7 +103,7 @@ export function createInitialDraft(): DraftState {
     purpose: 'carton',
     contentType: 'text',
     sizeType: 'small',
-    sizePresetId: 'small',
+    sizePresetId: initialPreset.id,
     needsReview: true,
     reviewReason: '请填写唛头内容并完成校对',
   });
@@ -57,11 +112,12 @@ export function createInitialDraft(): DraftState {
     business: '',
     purpose: 'carton',
     labels: [blankLabel],
-    sizePresets: defaultSizePresets.map((preset) => ({ ...preset })),
+    sizePresets,
     stylePresets: [{ id: 'default', name: '标准居中', style: { ...defaultStyle } }],
     activeLabelId: blankLabel.id,
     selectedLabelIds: [],
     recentSizes: [],
+    lastPrintedSize: normalizedLastPrintedSize,
     workspaceLayout: {
       version: 2,
       order: [...DEFAULT_WORKSPACE_LAYOUT.order],
@@ -87,6 +143,7 @@ export type DraftAction =
   | { type: 'update-size-preset'; id: string; patch: Partial<Omit<SizePreset, 'id'>> }
   | { type: 'remove-size-preset'; id: string }
   | { type: 'remember-size'; preset: SizePreset }
+  | { type: 'remember-printed-size'; widthMm: number; heightMm: number }
   | { type: 'set-panel-order'; order: WorkspacePanelId[] }
   | { type: 'resize-panel'; id: WorkspacePanelId; patch: Partial<WorkspacePanelSize> }
   | { type: 'toggle-panel-collapsed'; id: WorkspacePanelId }
@@ -224,6 +281,10 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
       ].slice(0, 8);
       return { ...state, recentSizes };
     }
+    case 'remember-printed-size': {
+      const lastPrintedSize = normalizeLastPrintedSize({ widthMm: action.widthMm, heightMm: action.heightMm });
+      return lastPrintedSize ? { ...state, lastPrintedSize } : state;
+    }
     case 'set-panel-order':
       return {
         ...state,
@@ -249,6 +310,6 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
         },
       };
     case 'clear-draft':
-      return createInitialDraft();
+      return createInitialDraft(state.lastPrintedSize);
   }
 }

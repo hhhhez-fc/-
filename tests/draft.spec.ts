@@ -60,6 +60,36 @@ describe('草稿状态', () => {
     expect(state.labels).toHaveLength(1);
     expect(state.labels[0]).toMatchObject({ content: '', source: 'manual', quantity: 1 });
     expect(state.activeLabelId).toBe(state.labels[0].id);
+    expect(state.lastPrintedSize).toBeNull();
+  });
+
+  it('只在发起实际打印后记住宽高，并供后续新增唛头使用', () => {
+    const remembered = draftReducer(createInitialDraft(), {
+      type: 'remember-printed-size',
+      widthMm: 86,
+      heightMm: 45,
+    });
+
+    expect(remembered.lastPrintedSize).toEqual({ widthMm: 86, heightMm: 45 });
+
+    const nextDraft = createInitialDraft(remembered.lastPrintedSize);
+    const activeLabel = nextDraft.labels.find((label) => label.id === nextDraft.activeLabelId)!;
+    const activePreset = nextDraft.sizePresets.find((preset) => preset.id === activeLabel.sizePresetId)!;
+    expect(activePreset).toMatchObject({ widthMm: 86, heightMm: 45 });
+  });
+
+  it('清空草稿时保留上次实际打印的宽高并用于新的空白唛头', () => {
+    const remembered = draftReducer(createInitialDraft(), {
+      type: 'remember-printed-size',
+      widthMm: 92,
+      heightMm: 58,
+    });
+    const cleared = draftReducer(remembered, { type: 'clear-draft' });
+    const activeLabel = cleared.labels.find((label) => label.id === cleared.activeLabelId)!;
+    const activePreset = cleared.sizePresets.find((preset) => preset.id === activeLabel.sizePresetId)!;
+
+    expect(cleared.lastPrintedSize).toEqual({ widthMm: 92, heightMm: 58 });
+    expect(activePreset).toMatchObject({ widthMm: 92, heightMm: 58 });
   });
 
   it('可收起板块并保留原有尺寸', () => {
@@ -255,6 +285,27 @@ describe('本地草稿存储', () => {
     const storage = { getItem: () => JSON.stringify(oldDraft) };
 
     expect(loadDraft(storage)).toMatchObject({ selectedLabelIds: [], business: '' });
+  });
+
+  it('读取草稿时丢弃超出可打印范围的上次打印尺寸', () => {
+    const invalidDraft = { ...createInitialDraft(), lastPrintedSize: { widthMm: 999, heightMm: 10 } };
+    const storage = { getItem: () => JSON.stringify(invalidDraft) };
+
+    expect(loadDraft(storage)?.lastPrintedSize).toBeNull();
+  });
+
+  it('读取没有记录的草稿时补建上次打印尺寸，并让空白唛头引用该尺寸', () => {
+    const emptyDraft = {
+      ...createInitialDraft(),
+      labels: [],
+      activeLabelId: null,
+      lastPrintedSize: { widthMm: 86, heightMm: 52 },
+    };
+    const loaded = loadDraft({ getItem: () => JSON.stringify(emptyDraft) })!;
+    const activeLabel = loaded.labels.find((label) => label.id === loaded.activeLabelId)!;
+    const activePreset = loaded.sizePresets.find((preset) => preset.id === activeLabel.sizePresetId);
+
+    expect(activePreset).toMatchObject({ widthMm: 86, heightMm: 52 });
   });
 
   it('hydrates an old draft with the default three-panel layout', () => {

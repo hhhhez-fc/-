@@ -10,6 +10,7 @@ import PrintPages from '../src/features/PrintPages';
 import SizeStylePanel from '../src/features/SizeStylePanel';
 import LabelEditor from '../src/features/LabelEditor';
 import { createPrintPlan } from '../src/domain/printing';
+import { buildFontSizePreviewLabel } from '../src/domain/fontSizePreview';
 
 describe('唛头打印工作台', () => {
   it('首次打开自动创建空白唛头，并可在预览内直接输入', () => {
@@ -57,6 +58,13 @@ describe('唛头打印工作台', () => {
     expect(previewHeading).toBeGreaterThanOrEqual(0);
     expect(textToolbar).toBeGreaterThan(previewHeading);
     expect(previewCanvas).toBeGreaterThan(textToolbar);
+  });
+
+  it('在尺寸与预览标题中提供新增唛头入口', () => {
+    const html = renderToStaticMarkup(<App initialState={createInitialDraft()} />);
+
+    expect(html).toContain('aria-label="在尺寸与预览中新增唛头"');
+    expect(html).toContain('>新增唛头</button>');
   });
 });
 
@@ -230,6 +238,26 @@ describe('逐行预览', () => {
 });
 
 describe('右侧样式设置', () => {
+  it('字号使用应用自有选择器，并把临时字号只应用到预览副本', () => {
+    const label = createLabel({ content: 'FY-01\nMADE IN CHINA', quantity: 1, source: 'manual', needsReview: false });
+    const html = renderToStaticMarkup(<SizeStylePanel
+      label={label}
+      presets={defaultSizePresets}
+      onChange={() => undefined}
+      onPresetChange={() => undefined}
+      onFontSizePreview={() => undefined}
+    />);
+
+    const preview = buildFontSizePreviewLabel(label, { fontMode: 'fixed', fontSizePt: 64 });
+
+    expect(html).toContain('aria-label="全部字号"');
+    expect(html).toContain('role="combobox"');
+    expect(preview).not.toBe(label);
+    expect(preview.style).toMatchObject({ fontMode: 'fixed', fontSizePt: 64 });
+    expect(preview.textLines.every((line) => line.style.fontSizePt === 64)).toBe(true);
+    expect(label.style.fontSizePt).not.toBe(64);
+  });
+
   it('省去重复区域标题和说明，只保留直接操作控件', () => {
     const label = createLabel({ content: 'FYF-TTT0103\n4576', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<SizeStylePanel

@@ -6,11 +6,11 @@ import {
   validateImageFile,
   type CropSelection,
 } from '../domain/images';
-import { createLabel, type LabelPurpose, type LabelRecord, type SizeType } from '../domain/labels';
+import { createLabel, type LabelPurpose, type LabelRecord } from '../domain/labels';
 import ImageCropSelector from './ImageCropSelector';
 
 interface ImageImporterProps {
-  sizePresetId: SizeType;
+  sizePresetId: string;
   purpose: LabelPurpose;
   onImport: (labels: LabelRecord[]) => void;
   onStatus: (message: string) => void;
@@ -33,6 +33,7 @@ export default function ImageImporter({ sizePresetId, purpose, onImport, onStatu
   const [images, setImages] = useState<PendingImage[]>([]);
   const controllers = useRef(new Map<string, AbortController>());
   const allControllers = useRef(new Set<AbortController>());
+  const legacySizeType = sizePresetId === 'large' ? 'large' : 'small';
 
   useEffect(() => () => {
     allControllers.current.forEach((controller) => controller.abort());
@@ -86,7 +87,7 @@ export default function ImageImporter({ sizePresetId, purpose, onImport, onStatu
       purpose,
       contentType: 'image',
       sizePresetId,
-      sizeType: sizePresetId,
+      sizeType: legacySizeType,
       sides: 1,
       imageFallback: image.previewUrl,
       needsReview: false,
@@ -130,7 +131,7 @@ export default function ImageImporter({ sizePresetId, purpose, onImport, onStatu
         purpose,
         contentType: 'text',
         sizePresetId,
-        sizeType: sizePresetId,
+        sizeType: legacySizeType,
         sides: 1,
         imageFallback: image.previewUrl,
         textLines: result.lines.map((line) => ({

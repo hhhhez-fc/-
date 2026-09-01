@@ -1,4 +1,9 @@
-import { createInitialDraft, type DraftState } from './draft';
+import {
+  createInitialDraft,
+  normalizeLastPrintedSize,
+  resolveDefaultNewLabelPreset,
+  type DraftState,
+} from './draft';
 import { defaultStyle, type LabelRecord } from './labels';
 import { createTextLines } from './textLines';
 import { hydrateWorkspaceLayout } from './workspaceLayout';
@@ -18,11 +23,33 @@ function isDraftState(value: unknown): value is DraftState {
 }
 
 function hydrateDraft(parsed: DraftState): DraftState {
-  const defaults = createInitialDraft();
-  const sourceLabels = parsed.labels.length ? parsed.labels : defaults.labels;
+  const lastPrintedSize = normalizeLastPrintedSize((parsed as Partial<DraftState>).lastPrintedSize);
+  const defaults = createInitialDraft(lastPrintedSize);
+  const savedSizePresets = parsed.sizePresets.length
+    ? parsed.sizePresets.map((preset) => ({ ...preset }))
+    : defaults.sizePresets.map((preset) => ({ ...preset }));
+  const defaultNewLabelPreset = resolveDefaultNewLabelPreset({
+    business: typeof parsed.business === 'string' ? parsed.business : '',
+    sizePresets: savedSizePresets,
+    lastPrintedSize,
+  });
+  const sizePresets = savedSizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)
+    ? savedSizePresets
+    : [...savedSizePresets, defaultNewLabelPreset];
+  const validPresetIds = new Set(sizePresets.map((preset) => preset.id));
+  const sourceLabels = parsed.labels.length
+    ? parsed.labels
+    : defaults.labels.map((label) => ({
+        ...label,
+        sizePresetId: defaultNewLabelPreset.id,
+        sizeType: defaultNewLabelPreset.id === 'large' ? 'large' as const : 'small' as const,
+      }));
   const labels = sourceLabels.map((label) => {
     const legacy = label as Partial<LabelRecord>;
-    const sizePresetId = legacy.sizePresetId ?? legacy.sizeType ?? 'small';
+    const requestedSizePresetId = legacy.sizePresetId ?? legacy.sizeType ?? 'small';
+    const sizePresetId = validPresetIds.has(requestedSizePresetId)
+      ? requestedSizePresetId
+      : defaultNewLabelPreset.id;
     return {
       ...legacy,
       purpose: legacy.purpose ?? 'carton',
@@ -57,6 +84,8 @@ function hydrateDraft(parsed: DraftState): DraftState {
     business: typeof parsed.business === 'string' ? parsed.business : '',
     purpose: parsed.purpose === 'envelope' ? 'envelope' : 'carton',
     labels,
+    sizePresets,
+    lastPrintedSize,
     recentSizes: Array.isArray(parsed.recentSizes) ? parsed.recentSizes.map((preset) => ({ ...preset })) : [],
     selectedLabelIds,
     activeLabelId: typeof parsed.activeLabelId === 'string' && validIds.has(parsed.activeLabelId)
