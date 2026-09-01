@@ -15,7 +15,8 @@ describe('草稿状态', () => {
 
     const next = draftReducer(createInitialDraft(), { type: 'add-label', label });
 
-    expect(next.labels).toEqual([label]);
+    expect(next.labels.at(-1)).toEqual(label);
+    expect(next.labels).toHaveLength(2);
     expect(next.activeLabelId).toBe(label.id);
   });
 
@@ -51,6 +52,25 @@ describe('草稿状态', () => {
     const withPurpose = draftReducer(withBusiness, { type: 'set-purpose', purpose: 'envelope' });
 
     expect(withPurpose).toMatchObject({ business: '义乌铺', purpose: 'envelope' });
+  });
+
+  it('默认草稿包含一条当前空白唛头', () => {
+    const state = createInitialDraft();
+
+    expect(state.labels).toHaveLength(1);
+    expect(state.labels[0]).toMatchObject({ content: '', source: 'manual', quantity: 1 });
+    expect(state.activeLabelId).toBe(state.labels[0].id);
+  });
+
+  it('可收起板块并保留原有尺寸', () => {
+    const state = createInitialDraft();
+    const next = draftReducer(state, { type: 'toggle-panel-collapsed', id: 'preview' });
+
+    expect(next.workspaceLayout.sizes.preview).toMatchObject({
+      widthPx: state.workspaceLayout.sizes.preview.widthPx,
+      heightPx: state.workspaceLayout.sizes.preview.heightPx,
+      collapsed: true,
+    });
   });
 
   it('保存面板顺序并限制面板尺寸', () => {
@@ -99,7 +119,7 @@ describe('草稿状态', () => {
         order: ['records', 'preview', 'intake'] as DraftState['workspaceLayout']['order'],
         sizes: {
           ...createInitialDraft().workspaceLayout.sizes,
-          preview: { widthPx: 800, heightPx: 900 },
+          preview: { widthPx: 800, heightPx: 900, collapsed: false },
         },
       },
     };
@@ -225,7 +245,7 @@ describe('本地草稿存储', () => {
 
     expect(saveDraft({ setItem }, draft)).toBe(true);
     expect(setItem).toHaveBeenCalledOnce();
-    expect(JSON.parse(setItem.mock.calls[0][1])).toMatchObject({ version: 1, labels: [] });
+    expect(JSON.parse(setItem.mock.calls[0][1])).toMatchObject({ version: 1, labels: [{ content: '' }] });
   });
 
   it('读取旧版同版本草稿时补齐选择状态和业务上下文', () => {
@@ -260,7 +280,7 @@ describe('本地草稿存储', () => {
     const loaded = loadDraft({ getItem: () => JSON.stringify(legacy) });
 
     expect(loaded?.workspaceLayout.order).toEqual(['records', 'intake', 'preview']);
-    expect(loaded?.workspaceLayout.sizes.records).toEqual({ widthPx: 520, heightPx: 700 });
+    expect(loaded?.workspaceLayout.sizes.records).toEqual({ widthPx: 520, heightPx: 700, collapsed: false });
     expect(loaded?.workspaceLayout.sizes).not.toHaveProperty('history');
   });
 
@@ -277,7 +297,11 @@ describe('本地草稿存储', () => {
   it('浏览器拒绝取得本机存储时仍可恢复和继续编辑', () => {
     const getBlockedStorage = () => { throw new Error('blocked'); };
 
-    expect(recoverDraft(getBlockedStorage)).toEqual(createInitialDraft());
+    expect(recoverDraft(getBlockedStorage)).toMatchObject({
+      business: '',
+      labels: [{ content: '', source: 'manual' }],
+      workspaceLayout: createInitialDraft().workspaceLayout,
+    });
     expect(saveDraftSafely(getBlockedStorage, createInitialDraft())).toBe(false);
   });
 });

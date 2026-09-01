@@ -12,14 +12,16 @@ import LabelEditor from '../src/features/LabelEditor';
 import { createPrintPlan } from '../src/domain/printing';
 
 describe('唛头打印工作台', () => {
-  it('空草稿提供三种清晰的录入入口和下一步说明', () => {
+  it('首次打开自动创建空白唛头，并可在预览内直接输入', () => {
     const html = renderToStaticMarkup(<App initialState={createInitialDraft()} />);
 
     expect(html).toContain('唛头打印工作台');
     expect(html).toContain('导入 Excel');
     expect(html).toContain('导入图片');
     expect(html).toContain('手动新增');
-    expect(html).toContain('还没有唛头');
+    expect(html).toContain('未填写内容');
+    expect(html).toContain('aria-label="直接输入唛头内容"');
+    expect(html).toContain('placeholder="在此输入唛头内容"');
   });
 
   it('将三个工作区板块暴露为可拖动、边缘可调整大小的区域，并把历史并入来源', () => {
@@ -39,6 +41,7 @@ describe('唛头打印工作台', () => {
     expect(html.match(/role="group"[^>]*aria-roledescription="可拖动板块"[^>]*tabindex="0"[^>]*data-panel-drag-handle/g)).toHaveLength(3);
     expect(html).not.toContain(' draggable=');
     expect(html.match(/aria-valuenow=/g)).toHaveLength(6);
+    expect(html.match(/aria-label="收起[^"]*板块"/g)).toHaveLength(3);
     expect(html).toContain('恢复默认布局');
   });
 
@@ -234,10 +237,6 @@ describe('右侧样式设置', () => {
       presets={defaultSizePresets}
       onChange={() => undefined}
       onPresetChange={() => undefined}
-      onCreatePreset={() => undefined}
-      recentSizes={[]}
-      onUseRecent={() => undefined}
-      onRememberSize={() => undefined}
     />);
 
     expect(html).toContain('aria-label="全部文字样式"');
@@ -246,17 +245,13 @@ describe('右侧样式设置', () => {
     expect(html).toContain('全部文字强调');
   });
 
-  it('提供直接的全部文字字号、排列方式和强调设置，并把低频尺寸设置折叠', () => {
+  it('提供直接的全部文字设置和始终可见的宽高输入', () => {
     const label = createLabel({ content: 'FYF-TTT0103\n4576', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<SizeStylePanel
       label={label}
       presets={defaultSizePresets}
       onChange={() => undefined}
       onPresetChange={() => undefined}
-      onCreatePreset={() => undefined}
-      recentSizes={[]}
-      onUseRecent={() => undefined}
-      onRememberSize={() => undefined}
     />);
 
     expect(html).toContain('全部文字样式');
@@ -267,8 +262,12 @@ describe('右侧样式设置', () => {
     expect(html).toContain('选择即应用');
     expect(html).toContain('保持当前左右位置');
     expect(html).not.toContain('全部自动排列');
-    expect(html).toContain('<summary>');
-    expect(html).toContain('尺寸与打印区域');
+    expect(html).not.toContain('<summary>');
+    expect(html).toContain('宽度（mm）');
+    expect(html).toContain('高度（mm）');
+    expect(html).not.toContain('尺寸预设');
+    expect(html).not.toContain('内边距（mm）');
+    expect(html).not.toContain('内容打印区域（mm）');
     expect(html).toContain('<span>行距</span>');
     expect(html).not.toContain('<span>文字方向</span>');
     expect(html).not.toContain('<span>水平对齐</span>');
@@ -297,24 +296,18 @@ describe('右侧样式设置', () => {
     expect(html).not.toContain('确认校对完成');
   });
 
-  it('提供毫米数值输入和恢复默认作为拖动替代操作', () => {
+  it('尺寸区只保留可修改的宽度和高度', () => {
     const label = createLabel({ content: 'FYF-TTT0103', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<SizeStylePanel
       label={label}
       presets={defaultSizePresets}
       onChange={() => undefined}
       onPresetChange={() => undefined}
-      onCreatePreset={() => undefined}
-      recentSizes={[]}
-      onUseRecent={() => undefined}
-      onRememberSize={() => undefined}
     />);
 
-    expect(html).toContain('内容打印区域（mm）');
-    expect(html).toContain('区域左边距');
-    expect(html).toContain('区域上边距');
-    expect(html).toContain('区域宽度');
-    expect(html).toContain('区域高度');
-    expect(html).toContain('恢复默认区域');
+    expect(html).toContain('宽度（mm）');
+    expect(html).toContain('高度（mm）');
+    expect(html).not.toContain('区域左边距');
+    expect(html).not.toContain('恢复默认区域');
   });
 });

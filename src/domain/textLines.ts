@@ -27,11 +27,30 @@ export function createTextLines(content: string): LabelTextLine[] {
 
 export function syncTextLines(existing: LabelTextLine[], content: string): LabelTextLine[] {
   const fresh = createTextLines(content);
+  const expandsDefaultCenteredLine = existing.length === 1
+    && existing[0].placement.xPercent === 50
+    && existing[0].placement.yPercent === 50
+    && existing[0].placement.horizontalSnap === 'center'
+    && existing[0].placement.verticalSnap === 'middle'
+    && fresh.length > 1;
   return fresh.map((line, index) => existing[index] ? {
     ...existing[index],
     text: line.text,
-    placement: { ...existing[index].placement },
+    placement: expandsDefaultCenteredLine ? {
+      xPercent: 50,
+      yPercent: Math.round((((index + .5) * 100) / fresh.length) * 100) / 100,
+      horizontalSnap: 'center',
+      verticalSnap: 'free',
+    } : { ...existing[index].placement },
     style: { ...existing[index].style },
+  } : expandsDefaultCenteredLine ? {
+    ...line,
+    placement: {
+      xPercent: 50,
+      yPercent: Math.round((((index + .5) * 100) / fresh.length) * 100) / 100,
+      horizontalSnap: 'center',
+      verticalSnap: 'free',
+    },
   } : line);
 }
 

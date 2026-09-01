@@ -32,6 +32,13 @@ describe('逐行文字模型', () => {
     expect(next[1].id).toBe(existing[1].id);
   });
 
+  it('在空白预览直接输入多行时把默认居中的单行均匀展开', () => {
+    const existing = createTextLines('');
+    const next = syncTextLines(existing, 'FY-01\nMADE IN CHINA');
+
+    expect(next.map((line) => line.placement.yPercent)).toEqual([25, 75]);
+  });
+
   it('reducer 同步正文与文字行', () => {
     const label = createLabel({ content: 'A\nB', quantity: 1, source: 'manual', needsReview: false });
     const state = { ...createInitialDraft(), labels: [label] };

@@ -19,7 +19,8 @@ function isDraftState(value: unknown): value is DraftState {
 
 function hydrateDraft(parsed: DraftState): DraftState {
   const defaults = createInitialDraft();
-  const labels = parsed.labels.map((label) => {
+  const sourceLabels = parsed.labels.length ? parsed.labels : defaults.labels;
+  const labels = sourceLabels.map((label) => {
     const legacy = label as Partial<LabelRecord>;
     const sizePresetId = legacy.sizePresetId ?? legacy.sizeType ?? 'small';
     return {

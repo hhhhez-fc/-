@@ -1,6 +1,7 @@
 import {
   defaultSizePresets,
   defaultStyle,
+  createLabel,
   type LabelPurpose,
   type LabelRecord,
   type LabelStyle,
@@ -13,6 +14,7 @@ import {
   DEFAULT_WORKSPACE_LAYOUT,
   hydrateWorkspaceLayout,
   resizeWorkspacePanel,
+  toggleWorkspacePanel,
   type WorkspaceLayout,
   type WorkspacePanelId,
   type WorkspacePanelSize,
@@ -38,14 +40,26 @@ export interface DraftState {
 }
 
 export function createInitialDraft(): DraftState {
+  const blankLabel = createLabel({
+    content: '',
+    quantity: 1,
+    sides: 1,
+    source: 'manual',
+    purpose: 'carton',
+    contentType: 'text',
+    sizeType: 'small',
+    sizePresetId: 'small',
+    needsReview: true,
+    reviewReason: '请填写唛头内容并完成校对',
+  });
   return {
     version: 1,
     business: '',
     purpose: 'carton',
-    labels: [],
+    labels: [blankLabel],
     sizePresets: defaultSizePresets.map((preset) => ({ ...preset })),
     stylePresets: [{ id: 'default', name: '标准居中', style: { ...defaultStyle } }],
-    activeLabelId: null,
+    activeLabelId: blankLabel.id,
     selectedLabelIds: [],
     recentSizes: [],
     workspaceLayout: {
@@ -75,6 +89,7 @@ export type DraftAction =
   | { type: 'remember-size'; preset: SizePreset }
   | { type: 'set-panel-order'; order: WorkspacePanelId[] }
   | { type: 'resize-panel'; id: WorkspacePanelId; patch: Partial<WorkspacePanelSize> }
+  | { type: 'toggle-panel-collapsed'; id: WorkspacePanelId }
   | { type: 'reset-workspace-layout' }
   | { type: 'clear-draft' };
 
@@ -218,6 +233,11 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
       return {
         ...state,
         workspaceLayout: resizeWorkspacePanel(state.workspaceLayout, action.id, action.patch),
+      };
+    case 'toggle-panel-collapsed':
+      return {
+        ...state,
+        workspaceLayout: toggleWorkspacePanel(state.workspaceLayout, action.id),
       };
     case 'reset-workspace-layout':
       return {

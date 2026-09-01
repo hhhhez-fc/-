@@ -99,6 +99,17 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .workspace-panel[data-drop-position="before"]::before { left: 2px; }
 .workspace-panel[data-drop-position="after"]::before { right: 2px; }
 .workspace-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; }
+.panel-collapse-toggle {
+  position: absolute; z-index: 6; top: .55rem; right: .55rem; min-height: 1.8rem; padding: .25rem .42rem;
+  color: var(--color-muted); background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-sm); font-size: .64rem;
+}
+.panel-collapse-toggle:hover { color: var(--color-signal); border-color: var(--color-signal); }
+.collapsed-panel-rail {
+  display: flex; flex: 1; flex-direction: column; align-items: center; gap: .7rem; padding: .7rem .35rem; background: #f5f5ef;
+}
+.collapsed-panel-rail > span { color: var(--color-signal); font: 700 .68rem Bahnschrift,Consolas,monospace; }
+.collapsed-panel-rail h2 { margin: 0; font-size: .8rem; line-height: 1.1; writing-mode: vertical-rl; }
+.collapsed-panel-rail button { margin-top: auto; min-height: 2rem; padding: .35rem .25rem; writing-mode: vertical-rl; }
 .panel-drag-handle { cursor: grab; user-select: none; touch-action: none; }
 .panel-drag-handle:hover { background: #ecefe9; }
 .panel-drag-handle:focus-visible { position: relative; z-index: 3; outline-offset: -3px; }
@@ -298,6 +309,12 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .label-paper.has-overflow { outline: 4px solid var(--color-signal); outline-offset: 4px; }
 .label-content-layer, .print-content-layer { position: absolute; overflow: hidden; }
 .label-content-layer img, .print-content-layer img { width: 100%; height: 100%; object-fit: contain; }
+.empty-label-input {
+  position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; padding: 1rem; color: #000; background: transparent;
+  border: 0; outline: 0; font: inherit; font-weight: inherit; line-height: inherit; text-align: center; white-space: pre-wrap;
+}
+.empty-label-input::placeholder { color: #7c837e; opacity: 1; }
+.empty-label-input:focus { box-shadow: inset 0 0 0 2px rgba(11,101,194,.38); }
 .print-area-frame {
   position: absolute; z-index: 1; cursor: move; touch-action: none; user-select: none;
   outline: 1px dashed var(--color-focus); box-shadow: 0 0 0 2px rgba(255,255,255,.72);
@@ -374,6 +391,8 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .all-text-toggles { grid-column: 1; align-self: stretch; margin: 0; padding: .25rem .35rem; background: var(--color-paper); border-radius: var(--radius-sm); }
 .all-text-toggles legend { padding: 0 .2rem; font-size: .64rem; }
 .all-text-toggles label { min-height: 1.75rem; padding: .2rem .4rem; font-size: .68rem; }
+.dimension-editor { grid-column: 2; align-self: stretch; padding: .35rem .45rem; background: var(--color-paper); border: 1px solid #b8bdb9; }
+.dimension-editor .two-columns { gap: .35rem; }
 .auto-layout-controls { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .65rem; align-items: end; margin-top: .65rem; }
 .advanced-settings { grid-column: 2; align-self: stretch; margin: 0; border: 1px solid #b8bdb9; background: var(--color-paper); }
 .advanced-settings[open] { grid-column: 1/-1; }
@@ -393,6 +412,7 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
   .all-text-style-fields { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .style-panel { grid-template-columns: minmax(0,1fr); }
   .all-text-toggles, .advanced-settings, .advanced-settings[open] { grid-column: 1; }
+  .dimension-editor { grid-column: 1; }
   .advanced-settings summary { white-space: normal; }
 }
 .recent-sizes { display: grid; gap: .45rem; margin-bottom: .75rem; padding-bottom: .7rem; border-bottom: 1px solid #d4d7d3; }
@@ -461,6 +481,10 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
   .app-status { min-width: 0; text-align: left; }
   .workspace { flex-direction: column; overflow-x: visible; }
   .workspace-panel { flex: 0 0 auto; inline-size: 100%; }
+  .workspace-panel.is-collapsed { block-size: 3.25rem; }
+  .collapsed-panel-rail { flex-direction: row; padding: .45rem .65rem; }
+  .collapsed-panel-rail h2, .collapsed-panel-rail button { writing-mode: horizontal-tb; }
+  .collapsed-panel-rail button { margin: 0 0 0 auto; }
   .workspace-panel[data-dragging="true"] { transform: none; }
   .workspace-panel[data-drop-position]::before { display: none; }
   .panel-resizer-x, .panel-resizer-corner { display: none; }

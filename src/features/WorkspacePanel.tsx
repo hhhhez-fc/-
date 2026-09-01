@@ -30,6 +30,7 @@ interface WorkspacePanelProps {
   onDragPreview: (target: WorkspacePanelDropTarget | null) => void;
   onMove: (id: WorkspacePanelId, delta: -1 | 1) => void;
   onResize: (id: WorkspacePanelId, patch: Partial<WorkspacePanelSize>) => void;
+  onToggleCollapse: (id: WorkspacePanelId) => void;
   children: ReactNode;
   className?: string;
   dropPosition?: WorkspacePanelDropTarget['position'];
@@ -68,6 +69,7 @@ export default function WorkspacePanel({
   onDragPreview,
   onMove,
   onResize,
+  onToggleCollapse,
   children,
   className,
   dropPosition,
@@ -79,7 +81,7 @@ export default function WorkspacePanel({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const title = PANEL_TITLES[id];
   const styles = {
-    '--panel-width': `${size.widthPx}px`,
+    '--panel-width': `${size.collapsed ? 52 : size.widthPx}px`,
     '--panel-height': `${size.heightPx}px`,
     '--panel-drag-x': `${dragOffset.x}px`,
     '--panel-drag-y': `${dragOffset.y}px`,
@@ -265,7 +267,7 @@ export default function WorkspacePanel({
 
   return (
     <section
-      className={`panel workspace-panel ${className ?? ''}`.trim()}
+      className={`panel workspace-panel ${size.collapsed ? 'is-collapsed' : ''} ${className ?? ''}`.trim()}
       style={styles}
       role="region"
       aria-labelledby={titleId}
@@ -278,7 +280,26 @@ export default function WorkspacePanel({
       onPointerCancel={finishTitleDrag}
       onKeyDown={moveTitleWithKeyboard}
     >
-      <div className="workspace-panel-body">{children}</div>
+      {size.collapsed ? (
+        <div className="collapsed-panel-rail">
+          <span aria-hidden="true">{id === 'intake' ? '01' : id === 'records' ? '02' : '03'}</span>
+          <h2 id={titleId}>{title}</h2>
+          <button type="button" aria-label={`展开${title}板块`} aria-expanded="false" onClick={() => onToggleCollapse(id)}>展开</button>
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="panel-collapse-toggle"
+            aria-label={`收起${title}板块`}
+            aria-expanded="true"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => onToggleCollapse(id)}
+          >收起</button>
+          <div id={`${id}-panel-body`} className="workspace-panel-body">{children}</div>
+        </>
+      )}
+      {!size.collapsed && <>
       <span
         role="separator"
         tabIndex={0}
@@ -317,6 +338,7 @@ export default function WorkspacePanel({
         onPointerUp={finishResize}
         onPointerCancel={finishResize}
       />
+      </>}
     </section>
   );
 }

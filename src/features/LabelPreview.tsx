@@ -68,6 +68,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
   const editStartRef = useRef<{ lineId: string; text: string } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [directEntryLabelId, setDirectEntryLabelId] = useState<string | null>(null);
   const [isAreaDragging, setIsAreaDragging] = useState(false);
   const [paperWidthPx, setPaperWidthPx] = useState(0);
   useLayoutEffect(() => {
@@ -224,6 +225,8 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
   };
   const activeLine = label.textLines.find((line) => line.id === activeLineId) ?? label.textLines[0];
   const activeIndex = Math.max(0, label.textLines.findIndex((line) => line.id === activeLine?.id));
+  const showDirectEntry = label.contentType === 'text'
+    && (!label.content.trim() || directEntryLabelId === label.id);
 
   return <div className="preview-stage">
     <div className="ruler ruler-horizontal"><span>{preset.widthMm} mm</span></div>
@@ -251,7 +254,20 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
       >
         <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }}>
         {draggingId && <><i className="snap-guide guide-x" /><i className="snap-guide guide-y" /></>}
-        {label.contentType === 'image' && label.imageFallback ? <img src={label.imageFallback} alt="待打印唛头" /> :
+        {label.contentType === 'image' && label.imageFallback ? <img src={label.imageFallback} alt="待打印唛头" /> : showDirectEntry ? (
+          <textarea
+            className="empty-label-input resize-none"
+            aria-label="直接输入唛头内容"
+            placeholder="在此输入唛头内容"
+            value={label.content}
+            onFocus={() => setDirectEntryLabelId(label.id)}
+            onBlur={() => setDirectEntryLabelId(null)}
+            onChange={(event) => onChange({ content: event.target.value })}
+            onKeyDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          />
+        ) :
           label.textLines.map((line, index) => {
             const isActive = line.id === activeLine?.id;
             const frameStyle: CSSProperties = {

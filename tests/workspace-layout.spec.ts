@@ -9,6 +9,7 @@ import {
   placeWorkspacePanel,
   reorderWorkspacePanels,
   resizeWorkspacePanel,
+  toggleWorkspacePanel,
   workspacePanelAutoScrollDirection,
   workspacePanelDragHasStarted,
   workspacePanelKeyboardMove,
@@ -83,9 +84,9 @@ it('migrates untouched legacy default widths so existing users receive the singl
 
   expect(hydrated.order).toEqual(['preview', 'intake', 'records']);
   expect(hydrated.sizes).toEqual({
-    intake: { widthPx: 300, heightPx: 640 },
-    preview: { widthPx: 540, heightPx: 760 },
-    records: { widthPx: 340, heightPx: 640 },
+    intake: { widthPx: 300, heightPx: 640, collapsed: false },
+    preview: { widthPx: 540, heightPx: 760, collapsed: false },
+    records: { widthPx: 340, heightPx: 640, collapsed: false },
   });
 });
 
@@ -120,4 +121,12 @@ it('moves a panel one position with a keyboard-safe command', () => {
     .toEqual(['intake', 'records', 'preview']);
   expect(moveWorkspacePanel(DEFAULT_WORKSPACE_LAYOUT, 'intake', -1).order)
     .toEqual(DEFAULT_WORKSPACE_LAYOUT.order);
+});
+
+it('toggles a panel into a persisted edge rail without changing its dimensions', () => {
+  const collapsed = toggleWorkspacePanel(DEFAULT_WORKSPACE_LAYOUT, 'intake');
+
+  expect(collapsed.sizes.intake).toEqual({ widthPx: 300, heightPx: 640, collapsed: true });
+  expect(toggleWorkspacePanel(collapsed, 'intake').sizes.intake.collapsed).toBe(false);
+  expect(hydrateWorkspaceLayout(collapsed).sizes.intake.collapsed).toBe(true);
 });

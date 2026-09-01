@@ -123,35 +123,6 @@ export default function App({ initialState }: AppProps) {
     setStatus('已删除一条唛头');
   };
 
-  const createCustomPreset = (source: NonNullable<typeof activePreset>) => {
-    if (!activeLabel) return;
-    const id = `custom-${crypto.randomUUID()}`;
-    dispatch({
-      type: 'add-size-preset',
-      preset: { ...source, id, name: `自定义尺寸 ${state.sizePresets.filter((preset) => preset.id.startsWith('custom-')).length + 1}` },
-    });
-    dispatch({ type: 'update-label', id: activeLabel.id, patch: { sizePresetId: id } });
-    dispatch({ type: 'remember-size', preset: source });
-    setStatus('已复制为自定义尺寸，可直接修改毫米数值');
-  };
-
-  const useRecentSize = (source: NonNullable<typeof activePreset>) => {
-    if (!activeLabel) return;
-    const existing = state.sizePresets.find((preset) => preset.widthMm === source.widthMm
-      && preset.heightMm === source.heightMm && preset.paddingMm === source.paddingMm);
-    if (existing) {
-      dispatch({ type: 'update-label', id: activeLabel.id, patch: { sizePresetId: existing.id } });
-      dispatch({ type: 'remember-size', preset: existing });
-      setStatus(`已套用 ${existing.widthMm} × ${existing.heightMm} mm`);
-      return;
-    }
-    const preset = { ...source, id: `custom-${crypto.randomUUID()}`, name: `常用尺寸 ${source.widthMm}×${source.heightMm}` };
-    dispatch({ type: 'add-size-preset', preset });
-    dispatch({ type: 'update-label', id: activeLabel.id, patch: { sizePresetId: preset.id } });
-    dispatch({ type: 'remember-size', preset });
-    setStatus(`已恢复 ${preset.widthMm} × ${preset.heightMm} mm`);
-  };
-
   const selectedCount = state.selectedLabelIds.length;
   const allSelected = state.labels.length > 0 && selectedCount === state.labels.length;
   const openActivePrintPreview = () => {
@@ -303,10 +274,6 @@ export default function App({ initialState }: AppProps) {
             presets={state.sizePresets}
             onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
             onPresetChange={(id, patch) => dispatch({ type: 'update-size-preset', id, patch })}
-            onCreatePreset={createCustomPreset}
-            recentSizes={state.recentSizes}
-            onUseRecent={useRecentSize}
-            onRememberSize={(preset) => dispatch({ type: 'remember-size', preset })}
           />
           <LabelPreview
             label={activeLabel}
@@ -391,6 +358,7 @@ export default function App({ initialState }: AppProps) {
               order: moveWorkspacePanel(state.workspaceLayout, panelId, delta).order,
             })}
             onResize={(panelId, patch) => dispatch({ type: 'resize-panel', id: panelId, patch })}
+            onToggleCollapse={(panelId) => dispatch({ type: 'toggle-panel-collapsed', id: panelId })}
           >
             {panelContents[id]}
           </WorkspacePanel>

@@ -5,6 +5,7 @@ export type WorkspacePanelId = typeof WORKSPACE_PANEL_IDS[number];
 export interface WorkspacePanelSize {
   widthPx: number;
   heightPx: number;
+  collapsed: boolean;
 }
 
 export interface WorkspaceLayout {
@@ -36,9 +37,9 @@ export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = {
   version: 2,
   order: ['intake', 'preview', 'records'],
   sizes: {
-    intake: { widthPx: 300, heightPx: 640 },
-    preview: { widthPx: 540, heightPx: 760 },
-    records: { widthPx: 340, heightPx: 640 },
+    intake: { widthPx: 300, heightPx: 640, collapsed: false },
+    preview: { widthPx: 540, heightPx: 760, collapsed: false },
+    records: { widthPx: 340, heightPx: 640, collapsed: false },
   },
 };
 
@@ -109,6 +110,7 @@ export function hydrateWorkspaceLayout(value: unknown): WorkspaceLayout {
         900,
       ),
       heightPx: clamp(finiteNumber(savedSize?.heightPx, defaultSize.heightPx), 320, 1200),
+      collapsed: typeof savedSize?.collapsed === 'boolean' ? savedSize.collapsed : false,
     }];
   })) as Record<WorkspacePanelId, WorkspacePanelSize>;
 
@@ -172,7 +174,12 @@ export function resizeWorkspacePanel(
       [id]: {
         widthPx: clamp(patch.widthPx ?? current.widthPx, WORKSPACE_PANEL_MIN_WIDTH, 900),
         heightPx: clamp(patch.heightPx ?? current.heightPx, 320, 1200),
+        collapsed: patch.collapsed ?? current.collapsed,
       },
     },
   };
+}
+
+export function toggleWorkspacePanel(layout: WorkspaceLayout, id: WorkspacePanelId): WorkspaceLayout {
+  return resizeWorkspacePanel(layout, id, { collapsed: !layout.sizes[id].collapsed });
 }
