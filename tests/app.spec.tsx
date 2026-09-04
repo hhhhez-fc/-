@@ -318,6 +318,94 @@ describe('图片识别区域', () => {
 });
 
 describe('逐行预览', () => {
+  it('屏幕预览和打印页使用同一个缩小后字号', () => {
+    const label = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      sizePresetId: 'large',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
+    });
+    label.style.fontSizePt = 48;
+    const previewHtml = renderToStaticMarkup(<LabelPreview
+      label={label}
+      preset={defaultSizePresets[0]}
+      activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
+      onChange={() => undefined}
+    />);
+    const group = createPrintPlan([label], defaultSizePresets).groups[0];
+    const printHtml = renderToStaticMarkup(<PrintPages group={group} />);
+
+    expect(previewHtml).toContain('font-size:50.666666666666664px');
+    expect(previewHtml).not.toContain('font-size:64px');
+    expect(printHtml).toContain('font-size:38pt');
+    expect(printHtml).not.toContain('font-size:48pt');
+  });
+
+  it('屏幕预览和打印页分别渲染每行解析后的字号', () => {
+    const label = createLabel({
+      content: 'MMMM\nI',
+      quantity: 1,
+      source: 'manual',
+      sizePresetId: 'large',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 10, widthMm: 50, heightMm: 40 },
+    });
+    label.style.fontSizePt = 48;
+    label.textLines[0].placement.yPercent = 22;
+    label.textLines[1].placement.yPercent = 72;
+    const previewHtml = renderToStaticMarkup(<LabelPreview
+      label={label}
+      preset={defaultSizePresets[0]}
+      activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
+      onChange={() => undefined}
+    />);
+    const printHtml = renderToStaticMarkup(<PrintPages group={createPrintPlan([label], defaultSizePresets).groups[0]} />);
+
+    expect(previewHtml).toContain('font-size:50.666666666666664px');
+    expect(previewHtml).toContain('font-size:64px');
+    expect(printHtml).toContain('font-size:38pt');
+    expect(printHtml).toContain('font-size:48pt');
+  });
+
+  it('屏幕预览和打印页以相同比例缩小局部字符字号', () => {
+    const label = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      sizePresetId: 'large',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
+    });
+    label.style.fontSizePt = 48;
+    label.textStyleRanges = [{ start: 0, end: 1, style: { fontSizePt: 60 } }];
+    const previewHtml = renderToStaticMarkup(<LabelPreview
+      label={label}
+      preset={defaultSizePresets[0]}
+      activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
+      onChange={() => undefined}
+    />);
+    const printHtml = renderToStaticMarkup(<PrintPages group={createPrintPlan([label], defaultSizePresets).groups[0]} />);
+
+    expect(previewHtml).toContain('font-size:60px');
+    expect(previewHtml).not.toContain('font-size:80px');
+    expect(printHtml).toContain('font-size:45pt');
+    expect(printHtml).not.toContain('font-size:60pt');
+  });
+
   it('每一行都渲染成独立可拖动对象', () => {
     const label = createLabel({ content: 'FY-01\nMADE IN CHINA', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<LabelPreview

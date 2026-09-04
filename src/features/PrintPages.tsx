@@ -51,17 +51,26 @@ export default function PrintPages({ group }: PrintPagesProps) {
               }}>
                 {label.contentType === 'image' && label.imageFallback
                   ? <img src={label.imageFallback} alt="" />
-                  : label.textLines.map((line, lineIndex) => <span className="print-positioned-text" key={line.id} style={{
-                    left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
-                    transform: placementTransform(line.placement), textAlign: label.style.horizontalAlign,
-                    whiteSpace: 'nowrap',
-                    writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
-                    fontFamily: line.style.fontFamily,
-                    fontSize: line.style.fontSizePt ? `${line.style.fontSizePt}pt` : undefined,
-                    fontWeight: line.style.fontWeight,
-                    fontStyle: line.style.italic ? 'italic' : undefined,
-                    textDecoration: line.style.underline ? 'underline' : undefined,
-                  }}><StyledTextLine label={label} line={line} lineIndex={lineIndex} /></span>)}
+                  : label.textLines.map((line, lineIndex) => {
+                    const lineLayout = layout?.lineLayouts?.[line.id];
+                    const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
+                    return <span className="print-positioned-text" key={line.id} style={{
+                      left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
+                      transform: placementTransform(line.placement), textAlign: label.style.horizontalAlign,
+                      whiteSpace: 'nowrap',
+                      writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
+                      fontFamily: line.style.fontFamily,
+                      fontSize: `${renderedFontSize}pt`,
+                      fontWeight: line.style.fontWeight,
+                      fontStyle: line.style.italic ? 'italic' : undefined,
+                      textDecoration: line.style.underline ? 'underline' : undefined,
+                    }}><StyledTextLine
+                      label={label}
+                      line={line}
+                      lineIndex={lineIndex}
+                      fontScale={lineLayout?.fontScale}
+                    /></span>;
+                  })}
               </div>
             </section>
           );

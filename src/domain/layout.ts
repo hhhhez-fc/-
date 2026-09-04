@@ -2,6 +2,7 @@ import type { LabelRecord, SizePreset } from './labels';
 import { buildStyledSegments } from './richText';
 import { resolvePrintArea } from './placement';
 import { MAX_LABEL_QUANTITY } from './quantity';
+import { rotationSwapsAxes, type PrintRotation } from './printRotation';
 
 export interface LayoutInput {
   content: string;
@@ -15,6 +16,15 @@ export interface LayoutInput {
 }
 
 export type LayoutResult = { ok: true; fontSize: number; lines: string[] } | { ok: false; error: string; fontSize?: number };
+
+export interface ResolvedLineLayout {
+  fontSizePt: number;
+  fontScale: number;
+}
+
+export type LabelLayoutResult =
+  | { ok: true; fontSize: number; lineLayouts: Record<string, ResolvedLineLayout>; lines: string[] }
+  | { ok: false; error: string; fontSize?: number; lineLayouts?: Record<string, ResolvedLineLayout> };
 
 export const MM_TO_PX = 3.7795;
 const PT_TO_PX = 96 / 72;
@@ -49,12 +59,47 @@ function rangeForLine(label: LabelRecord, lineIndex: number) {
     }));
 }
 
-function lineDimensions(label: LabelRecord, lineIndex: number, baseFontSizePt: number) {
+interface TextRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+function rectsOverlap(a: TextRect, b: TextRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function requestedLineSize(label: LabelRecord, lineIndex: number): number {
+  const requested = label.textLines[lineIndex].style.fontSizePt ?? label.style.fontSizePt;
+  return Number.isFinite(requested) && requested > 0 ? requested : 1;
+}
+
+function fontSizeCandidates(requested: number, minimum: number): number[] {
+  const safeMinimum = Number.isFinite(minimum) && minimum > 0 ? minimum : 1;
+  const lowerBound = Math.min(requested, safeMinimum);
+  const candidates: number[] = [];
+  let candidate = requested;
+  while (candidate > lowerBound) {
+    candidates.push(candidate);
+    candidate = Math.max(lowerBound, candidate - 1);
+  }
+  candidates.push(lowerBound);
+  return candidates;
+}
+
+function scaledLineDimensions(
+  label: LabelRecord,
+  lineIndex: number,
+  baseFontSizePt: number,
+  fontScale: number,
+) {
   const line = label.textLines[lineIndex];
   const segments = buildStyledSegments(line.text || ' ', rangeForLine(label, lineIndex));
   const styled = segments.map((segment) => {
     const style = { ...line.style, ...segment.style };
-    const fontSizePx = (style.fontSizePt ?? baseFontSizePt) * PT_TO_PX;
+    const fontSizePt = style.fontSizePt === undefined ? baseFontSizePt : style.fontSizePt * fontScale;
+    const fontSizePx = fontSizePt * PT_TO_PX;
     const emphasis = (style.fontWeight === 700 ? 1.04 : 1) * (style.italic ? 1.04 : 1);
     return { text: segment.text, fontSizePx, emphasis };
   });
@@ -70,9 +115,20 @@ function lineDimensions(label: LabelRecord, lineIndex: number, baseFontSizePt: n
   };
 }
 
-function lineRect(label: LabelRecord, lineIndex: number, baseFontSizePt: number, width: number, height: number) {
+function scaledLineRect(
+  label: LabelRecord,
+  lineIndex: number,
+  baseFontSizePt: number,
+  fontScale: number,
+  width: number,
+  height: number,
+  rotation: PrintRotation,
+) {
   const line = label.textLines[lineIndex];
-  const dimensions = lineDimensions(label, lineIndex, baseFontSizePt);
+  const measured = scaledLineDimensions(label, lineIndex, baseFontSizePt, fontScale);
+  const dimensions = rotationSwapsAxes(rotation)
+    ? { width: measured.height, height: measured.width }
+    : measured;
   const anchorX = width * (Math.max(0, Math.min(100, line.placement.xPercent)) / 100);
   const anchorY = height * (Math.max(0, Math.min(100, line.placement.yPercent)) / 100);
   const left = line.placement.horizontalSnap === 'left'
@@ -84,38 +140,58 @@ function lineRect(label: LabelRecord, lineIndex: number, baseFontSizePt: number,
   return { left, top, right: left + dimensions.width, bottom: top + dimensions.height };
 }
 
-function rectsOverlap(a: ReturnType<typeof lineRect>, b: ReturnType<typeof lineRect>): boolean {
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+function scaledRectFitsBounds(rect: ReturnType<typeof scaledLineRect>, width: number, height: number): boolean {
+  return rect.left >= 0 && rect.top >= 0 && rect.right <= width && rect.bottom <= height;
 }
 
-export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): LayoutResult {
+export function solveLabelTextLayout(
+  label: LabelRecord,
+  preset: SizePreset,
+  rotation: PrintRotation = 0,
+): LabelLayoutResult {
   const printArea = resolvePrintArea(label.printArea, preset);
   const width = Math.max(1, printArea.widthMm * MM_TO_PX);
   const height = Math.max(1, printArea.heightMm * MM_TO_PX);
-  const candidates = label.style.fontMode === 'fixed'
-    ? [label.style.fontSizePt]
-    : Array.from({ length: Math.max(0, preset.maxFontSize - preset.minFontSize + 1) }, (_, index) => preset.maxFontSize - index);
   const printableLineIndexes = label.textLines
     .map((line, index) => line.text.trim() ? index : -1)
     .filter((index) => index >= 0);
+  const lineLayouts: Record<string, ResolvedLineLayout> = {};
+  const rects: ReturnType<typeof scaledLineRect>[] = [];
 
-  const fontSize = candidates.find((candidate) => printableLineIndexes.every((index) => {
-    const dimensions = lineDimensions(label, index, candidate);
-    return dimensions.width <= width && dimensions.height <= height;
-  }));
-  if (fontSize === undefined) {
-    const fallbackFontSize = candidates.at(-1);
-    return label.style.fontMode === 'auto'
-      ? { ok: false, error: '内容在最小字号下仍无法完整显示', fontSize: fallbackFontSize }
-      : { ok: false, error: '固定字号下内容超出唛头范围', fontSize: fallbackFontSize };
+  for (const index of printableLineIndexes) {
+    const requested = requestedLineSize(label, index);
+    const resolved = fontSizeCandidates(requested, preset.minFontSize).find((candidate) => {
+      const fontScale = candidate / requested;
+      const rect = scaledLineRect(label, index, candidate, fontScale, width, height, rotation);
+      return scaledRectFitsBounds(rect, width, height);
+    });
+    if (resolved === undefined) {
+      const fallbackFontSize = Math.min(requested, preset.minFontSize);
+      lineLayouts[label.textLines[index].id] = {
+        fontSizePt: fallbackFontSize,
+        fontScale: fallbackFontSize / requested,
+      };
+      return {
+        ok: false,
+        error: '内容在最小字号下仍无法完整显示',
+        fontSize: fallbackFontSize,
+        lineLayouts,
+      };
+    }
+    const fontScale = resolved / requested;
+    lineLayouts[label.textLines[index].id] = { fontSizePt: resolved, fontScale };
+    rects.push(scaledLineRect(label, index, resolved, fontScale, width, height, rotation));
   }
 
-  const rects = printableLineIndexes.map((index) => lineRect(label, index, fontSize, width, height));
-  const fitsBounds = rects.every((rect) => rect.left >= 0 && rect.top >= 0 && rect.right <= width && rect.bottom <= height);
-  if (!fitsBounds) return { ok: false, error: '文字位置超出唛头范围', fontSize };
-  const fitsWithoutOverlap = rects.every((rect, index) => rects.slice(index + 1).every((other) => !rectsOverlap(rect, other)));
-  if (!fitsWithoutOverlap) return { ok: false, error: '文字行发生重叠', fontSize };
-  return { ok: true, fontSize, lines: label.textLines.map((line) => line.text) };
+  const fontSize = printableLineIndexes.length > 0
+    ? lineLayouts[label.textLines[printableLineIndexes[0]].id].fontSizePt
+    : label.style.fontSizePt;
+  const fitsWithoutOverlap = rects.every((rect, index) =>
+    rects.slice(index + 1).every((other) => !rectsOverlap(rect, other)));
+  if (!fitsWithoutOverlap) {
+    return { ok: false, error: '文字行发生重叠', fontSize, lineLayouts };
+  }
+  return { ok: true, fontSize, lineLayouts, lines: label.textLines.map((line) => line.text) };
 }
 
 function wrapText(content: string, maxChars: number) {

@@ -201,7 +201,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     event.preventDefault();
     event.stopPropagation();
     const amount = event.shiftKey ? 5 : 1;
-    const current = line.style.fontSizePt ?? fontSize;
+    const current = line.style.fontSizePt ?? label.style.fontSizePt;
     patchLine(line, { style: { ...line.style, fontSizePt: Math.max(8, Math.min(120, current + direction * amount)) } });
   };
   const startEditing = (line: LabelTextLine) => {
@@ -281,6 +281,8 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
           label.textLines.map((line, index) => {
             const isSelected = selectedLineIds.includes(line.id);
             const isActive = line.id === activeLine?.id;
+            const lineLayout = layout?.lineLayouts?.[line.id];
+            const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
             const frameStyle: CSSProperties = {
               left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
               transform: placementTransform(line.placement),
@@ -290,7 +292,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
               whiteSpace: 'nowrap',
               writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
               fontFamily: line.style.fontFamily,
-              fontSize: line.style.fontSizePt ? `${line.style.fontSizePt * (96 / 72) * previewScale}px` : undefined,
+              fontSize: `${renderedFontSize * (96 / 72) * previewScale}px`,
               fontWeight: line.style.fontWeight,
               fontStyle: line.style.italic ? 'italic' : undefined,
               textDecoration: line.style.underline ? 'underline' : undefined,
@@ -336,7 +338,13 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
                   dragStartRef.current = null;
                 }}
                 onPointerCancel={() => { setDraggingId(null); dragStartRef.current = null; }} onKeyDown={(event) => handleKeyDown(line, event)}>
-                <StyledTextLine label={label} line={line} lineIndex={index} previewScale={previewScale} />
+                <StyledTextLine
+                  label={label}
+                  line={line}
+                  lineIndex={index}
+                  previewScale={previewScale}
+                  fontScale={lineLayout?.fontScale}
+                />
               </button>
               {isActive && textResizeHandles.map((handle) => <span
                 role="slider"
@@ -346,7 +354,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
                 aria-label={`从${handle === 'nw' ? '左上' : handle === 'ne' ? '右上' : handle === 'se' ? '右下' : '左下'}调整第 ${index + 1} 行文字大小；方向键调整字号，Shift 加速`}
                 aria-valuemin={8}
                 aria-valuemax={120}
-                aria-valuenow={line.style.fontSizePt ?? fontSize}
+                aria-valuenow={line.style.fontSizePt ?? label.style.fontSizePt}
                 onKeyDown={(event) => resizeTextWithKeyboard(line, event)}
                 onPointerDown={(event) => {
                   event.preventDefault();
@@ -357,7 +365,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
                   textResizeRef.current = {
                     clientX: event.clientX,
                     clientY: event.clientY,
-                    fontSizePt: line.style.fontSizePt ?? fontSize,
+                    fontSizePt: line.style.fontSizePt ?? label.style.fontSizePt,
                     width: bounds.width,
                     height: bounds.height,
                     lineId: line.id,
@@ -401,7 +409,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
       </div>
     </div>
     <div className={`layout-status ${layout && !layout.ok ? 'is-error' : ''}`} role="status">
-      <span>{layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? fontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}</span>
+      <span>{layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? label.style.fontSizePt} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}</span>
       {activeLine && <button
         className="layout-status-action"
         type="button"

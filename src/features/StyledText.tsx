@@ -21,7 +21,19 @@ export default function StyledText({ label, fallback = '' }: StyledTextProps) {
   })}</>;
 }
 
-export function StyledTextLine({ label, line, lineIndex, previewScale }: { label: LabelRecord; line: LabelTextLine; lineIndex: number; previewScale?: number }) {
+export function StyledTextLine({
+  label,
+  line,
+  lineIndex,
+  previewScale,
+  fontScale = 1,
+}: {
+  label: LabelRecord;
+  line: LabelTextLine;
+  lineIndex: number;
+  previewScale?: number;
+  fontScale?: number;
+}) {
   const values = label.content.replace(/\r\n?/g, '\n').split('\n');
   const offset = values.slice(0, lineIndex).reduce((total, value) => total + value.length + 1, 0);
   const ranges = label.textStyleRanges
@@ -35,7 +47,9 @@ export function StyledTextLine({ label, line, lineIndex, previewScale }: { label
     const style: CSSProperties = {
       fontFamily: segment.style.fontFamily,
       fontSize: segment.style.fontSizePt
-        ? previewScale === undefined ? `${segment.style.fontSizePt}pt` : `${segment.style.fontSizePt * (96 / 72) * previewScale}px`
+        ? previewScale === undefined
+          ? `${segment.style.fontSizePt * fontScale}pt`
+          : `${segment.style.fontSizePt * fontScale * (96 / 72) * previewScale}px`
         : undefined,
       fontWeight: segment.style.fontWeight,
       fontStyle: segment.style.italic ? 'italic' : undefined,
