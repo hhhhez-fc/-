@@ -341,9 +341,9 @@ describe('逐行预览', () => {
     const group = createPrintPlan([label], defaultSizePresets).groups[0];
     const printHtml = renderToStaticMarkup(<PrintPages group={group} />);
 
-    expect(previewHtml).toContain('font-size:50.666666666666664px');
+    expect(previewHtml).toContain('font-size:49.33333333333333px');
     expect(previewHtml).not.toContain('font-size:64px');
-    expect(printHtml).toContain('font-size:38pt');
+    expect(printHtml).toContain('font-size:37pt');
     expect(printHtml).not.toContain('font-size:48pt');
   });
 
@@ -371,9 +371,9 @@ describe('逐行预览', () => {
     />);
     const printHtml = renderToStaticMarkup(<PrintPages group={createPrintPlan([label], defaultSizePresets).groups[0]} />);
 
-    expect(previewHtml).toContain('font-size:50.666666666666664px');
+    expect(previewHtml).toContain('font-size:49.33333333333333px');
     expect(previewHtml).toContain('font-size:64px');
-    expect(printHtml).toContain('font-size:38pt');
+    expect(printHtml).toContain('font-size:37pt');
     expect(printHtml).toContain('font-size:48pt');
   });
 
@@ -400,9 +400,9 @@ describe('逐行预览', () => {
     />);
     const printHtml = renderToStaticMarkup(<PrintPages group={createPrintPlan([label], defaultSizePresets).groups[0]} />);
 
-    expect(previewHtml).toContain('font-size:60px');
+    expect(previewHtml).toContain('font-size:56.666666666666664px');
     expect(previewHtml).not.toContain('font-size:80px');
-    expect(printHtml).toContain('font-size:45pt');
+    expect(printHtml).toContain('font-size:42.5pt');
     expect(printHtml).not.toContain('font-size:60pt');
   });
 
@@ -446,7 +446,7 @@ describe('逐行预览', () => {
       onChange={() => undefined}
     />);
 
-    expect(html).toContain('font-size:16px');
+    expect(html).toContain('font-size:14.666666666666666px');
     expect(html).toContain('文字行发生重叠');
   });
 

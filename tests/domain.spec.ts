@@ -138,9 +138,92 @@ describe('唛头排版', () => {
     expect(result.ok && result.lineLayouts[label.textLines[0].id].fontScale).toBeLessThan(1);
   });
 
+  it('全局粗体被文字行继承时会在边界处触发缩小', () => {
+    const plain = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    plain.style.fontSizePt = 38;
+    plain.style.fontWeight = 400;
+    const bold = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    bold.style.fontSizePt = 38;
+    bold.style.fontWeight = 700;
+
+    const plainResult = solveLabelTextLayout(plain, defaultSizePresets[0]);
+    const boldResult = solveLabelTextLayout(bold, defaultSizePresets[0]);
+
+    expect(plainResult.ok && plainResult.lineLayouts[plain.textLines[0].id].fontSizePt).toBe(38);
+    expect(boldResult.ok && boldResult.lineLayouts[bold.textLines[0].id].fontSizePt).toBeLessThan(38);
+  });
+
+  it('全局斜体被文字行继承时会在边界处触发缩小', () => {
+    const plain = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    plain.style.fontSizePt = 38;
+    plain.style.fontWeight = 400;
+    plain.style.italic = false;
+    const italic = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    italic.style.fontSizePt = 38;
+    italic.style.fontWeight = 400;
+    italic.style.italic = true;
+
+    const plainResult = solveLabelTextLayout(plain, defaultSizePresets[0]);
+    const italicResult = solveLabelTextLayout(italic, defaultSizePresets[0]);
+
+    expect(plainResult.ok && plainResult.lineLayouts[plain.textLines[0].id].fontSizePt).toBe(38);
+    expect(italicResult.ok && italicResult.lineLayouts[italic.textLines[0].id].fontSizePt).toBeLessThan(38);
+  });
+
   it('旋转 90 或 270 度时交换文字的可用轴', () => {
     expect([0, 90, 180, 270].map((rotation) => rotationSwapsAxes(rotation as 0 | 90 | 180 | 270)))
       .toEqual([false, true, false, true]);
+  });
+
+  it('非居中锚点在 90 与 270 度旋转下使用相同的旋转边界', () => {
+    const label = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
+    });
+    label.style.fontSizePt = 48;
+    label.style.fontWeight = 400;
+    label.textLines[0].placement = {
+      xPercent: 25,
+      yPercent: 70,
+      horizontalSnap: 'free',
+      verticalSnap: 'free',
+    };
+
+    const clockwise = solveLabelTextLayout(label, defaultSizePresets[0], 90);
+    const counterClockwise = solveLabelTextLayout(label, defaultSizePresets[0], 270);
+
+    expect(clockwise.ok).toBe(true);
+    expect(counterClockwise.ok).toBe(true);
+    expect(clockwise.ok && clockwise.lineLayouts[label.textLines[0].id].fontSizePt).toBe(13);
+    expect(counterClockwise.ok && counterClockwise.lineLayouts[label.textLines[0].id])
+      .toEqual(clockwise.ok && clockwise.lineLayouts[label.textLines[0].id]);
   });
 
   it('最小字号仍无法容纳时保持打印阻断', () => {
@@ -160,6 +243,24 @@ describe('唛头排版', () => {
       lineLayouts: {
         [label.textLines[0].id]: { fontSizePt: defaultSizePresets[1].minFontSize },
       },
+    });
+  });
+
+  it('任一行在最小字号仍失败时仍会返回所有非空行的尝试排版', () => {
+    const label = createLabel({
+      content: 'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nI',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    });
+    label.style.fontSizePt = 48;
+
+    const result = solveLabelTextLayout(label, defaultSizePresets[1]);
+
+    expect(result.ok).toBe(false);
+    expect(result.lineLayouts).toMatchObject({
+      [label.textLines[0].id]: { fontSizePt: defaultSizePresets[1].minFontSize },
+      [label.textLines[1].id]: { fontSizePt: expect.any(Number) },
     });
   });
 

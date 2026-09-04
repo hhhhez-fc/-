@@ -97,8 +97,14 @@ function scaledLineDimensions(
   const line = label.textLines[lineIndex];
   const segments = buildStyledSegments(line.text || ' ', rangeForLine(label, lineIndex));
   const styled = segments.map((segment) => {
-    const style = { ...line.style, ...segment.style };
-    const fontSizePt = style.fontSizePt === undefined ? baseFontSizePt : style.fontSizePt * fontScale;
+    const style = {
+      fontWeight: label.style.fontWeight,
+      italic: label.style.italic,
+      ...line.style,
+      ...segment.style,
+    };
+    const explicitFontSizePt = segment.style.fontSizePt ?? line.style.fontSizePt;
+    const fontSizePt = explicitFontSizePt === undefined ? baseFontSizePt : explicitFontSizePt * fontScale;
     const fontSizePx = fontSizePt * PT_TO_PX;
     const emphasis = (style.fontWeight === 700 ? 1.04 : 1) * (style.italic ? 1.04 : 1);
     return { text: segment.text, fontSizePx, emphasis };
@@ -157,6 +163,7 @@ export function solveLabelTextLayout(
     .filter((index) => index >= 0);
   const lineLayouts: Record<string, ResolvedLineLayout> = {};
   const rects: ReturnType<typeof scaledLineRect>[] = [];
+  let firstOverflowFontSize: number | undefined;
 
   for (const index of printableLineIndexes) {
     const requested = requestedLineSize(label, index);
@@ -171,12 +178,8 @@ export function solveLabelTextLayout(
         fontSizePt: fallbackFontSize,
         fontScale: fallbackFontSize / requested,
       };
-      return {
-        ok: false,
-        error: '内容在最小字号下仍无法完整显示',
-        fontSize: fallbackFontSize,
-        lineLayouts,
-      };
+      firstOverflowFontSize ??= fallbackFontSize;
+      continue;
     }
     const fontScale = resolved / requested;
     lineLayouts[label.textLines[index].id] = { fontSizePt: resolved, fontScale };
@@ -186,6 +189,14 @@ export function solveLabelTextLayout(
   const fontSize = printableLineIndexes.length > 0
     ? lineLayouts[label.textLines[printableLineIndexes[0]].id].fontSizePt
     : label.style.fontSizePt;
+  if (firstOverflowFontSize !== undefined) {
+    return {
+      ok: false,
+      error: '内容在最小字号下仍无法完整显示',
+      fontSize: firstOverflowFontSize,
+      lineLayouts,
+    };
+  }
   const fitsWithoutOverlap = rects.every((rect, index) =>
     rects.slice(index + 1).every((other) => !rectsOverlap(rect, other)));
   if (!fitsWithoutOverlap) {
