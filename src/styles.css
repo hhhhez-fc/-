@@ -509,6 +509,18 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .print-groups article p { margin: 0; color: var(--color-muted); font-size: .68rem; }
 .print-group-index { color: var(--color-signal); font: 700 .7rem Bahnschrift,Consolas,monospace; }
 .print-group-actions { display: flex; align-items: center; gap: .45rem; }
+.print-label-previews { grid-column: 1/-1; display: grid; gap: .55rem; }
+.print-label-preview-row { display: grid; grid-template-columns: 9.375rem minmax(0,1fr); align-items: center; gap: .75rem; padding: .6rem; background: var(--color-paper); border: 1px solid var(--color-line); }
+.print-label-thumbnail { position: relative; width: 9.375rem; overflow: hidden; color: #000; background: #fff; border: 1px solid #9da49f; }
+.print-label-thumbnail-content { position: absolute; overflow: hidden; }
+.print-label-thumbnail-text { position: absolute; display: block; white-space: nowrap; }
+.print-label-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.print-label-preview-copy { display: grid; gap: .35rem; min-width: 0; }
+.print-label-preview-copy > strong { overflow: hidden; font-size: .74rem; text-overflow: ellipsis; white-space: nowrap; }
+.print-label-preview-copy > span { color: var(--color-muted); font-size: .68rem; }
+.print-rotation-control { display: flex; align-items: center; gap: .5rem; }
+.print-rotation-control span { color: var(--color-muted); font: 700 .68rem Bahnschrift,Consolas,monospace; }
+.print-label-preview-copy .print-rotation-error { color: var(--color-danger); font-weight: 700; line-height: 1.4; }
 .print-root { display: none; }
 
 @media (max-width: 720px) {
@@ -538,6 +550,8 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
   .ruler-vertical { left: .65rem; }
   .print-groups article { grid-template-columns: 2rem minmax(0,1fr); }
   .print-group-actions { grid-column: 1/-1; align-items: stretch; flex-direction: column; }
+  .print-label-preview-row { grid-template-columns: minmax(0,1fr); }
+  .print-label-thumbnail { width: min(100%,12rem); }
 }
 @media (prefers-reduced-motion: reduce) {
   /* Accessibility override must win over every component transition. */

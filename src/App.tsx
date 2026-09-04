@@ -24,6 +24,7 @@ import {
 import WorkspacePanel from './features/WorkspacePanel';
 import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSizePreview';
 import { hasSameSizePresetSnapshot, restoreRecentLabel, type RecentLabelEntry } from './domain/history';
+import { nextPrintRotation, type PrintRotation } from './domain/printRotation';
 
 interface AppProps {
   initialState?: DraftState;
@@ -42,6 +43,7 @@ export default function App({ initialState }: AppProps) {
   }>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
+  const [printRotations, setPrintRotations] = useState<Record<string, PrintRotation>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [selectedLineIds, setSelectedLineIds] = useState<string[]>([]);
   const [fontSizePreview, setFontSizePreview] = useState<null | { labelId: string; choice: FontSizeChoice }>(null);
@@ -139,7 +141,16 @@ export default function App({ initialState }: AppProps) {
   };
 
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
-  const closePrintDialog = useCallback(() => setPrintDialogOpen(false), []);
+  const closePrintDialog = useCallback(() => {
+    setPrintDialogOpen(false);
+    setPrintRotations({});
+  }, []);
+  const rotatePrintedLabel = useCallback((id: string) => {
+    setPrintRotations((current) => ({
+      ...current,
+      [id]: nextPrintRotation(current[id] ?? 0),
+    }));
+  }, []);
   const selectLine = useCallback((id: string) => {
     setActiveLineId(id);
     setSelectedLineIds((current) => current.includes(id) ? current : [...current, id]);
@@ -475,6 +486,8 @@ export default function App({ initialState }: AppProps) {
     <PrintReviewDialog
       open={printDialogOpen}
       plan={printPlan}
+      rotations={printRotations}
+      onRotateLabel={rotatePrintedLabel}
       onClose={closePrintDialog}
       onEditLabel={(id) => {
         activateLabel(id);
@@ -486,7 +499,7 @@ export default function App({ initialState }: AppProps) {
         setStatus(`正在打开 ${group.sizeLabel} 的打印设置；系统打印份数请保持 1`);
       }}
     />
-    <PrintPages group={activePrintGroup} />
+    <PrintPages group={activePrintGroup} rotations={printRotations} />
     </>
   );
 }

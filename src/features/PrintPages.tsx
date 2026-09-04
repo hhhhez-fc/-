@@ -1,21 +1,16 @@
 import type { CSSProperties } from 'react';
 import { solveLabelTextLayout } from '../domain/layout';
 import type { PrintGroup } from '../domain/printing';
-import type { TextPlacement } from '../domain/labels';
 import { resolvePrintArea } from '../domain/placement';
+import { rotationTransform, type PrintRotation } from '../domain/printRotation';
 import { StyledTextLine } from './StyledText';
 
 interface PrintPagesProps {
   group: PrintGroup | null;
+  rotations?: Record<string, PrintRotation>;
 }
 
-function placementTransform(placement: TextPlacement): string {
-  const x = placement.horizontalSnap === 'left' ? '0%' : placement.horizontalSnap === 'right' ? '-100%' : '-50%';
-  const y = placement.verticalSnap === 'top' ? '0%' : placement.verticalSnap === 'bottom' ? '-100%' : '-50%';
-  return `translate(${x}, ${y})`;
-}
-
-export default function PrintPages({ group }: PrintPagesProps) {
+export default function PrintPages({ group, rotations = {} }: PrintPagesProps) {
   if (!group) return null;
   return (
     <>
@@ -27,7 +22,8 @@ export default function PrintPages({ group }: PrintPagesProps) {
       `}</style>
       <div className="print-root" aria-hidden="true">
         {group.pages.map(({ label, preset, copyNumber }) => {
-          const layout = label.contentType === 'text' ? solveLabelTextLayout(label, preset) : null;
+          const rotation = label.contentType === 'text' ? rotations[label.id] ?? 0 : 0;
+          const layout = label.contentType === 'text' ? solveLabelTextLayout(label, preset, rotation) : null;
           const printArea = resolvePrintArea(label.printArea, preset);
           const fontSize = layout?.fontSize
             ?? (label.style.fontMode === 'auto' ? preset.minFontSize : label.style.fontSizePt);
@@ -56,7 +52,7 @@ export default function PrintPages({ group }: PrintPagesProps) {
                     const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
                     return <span className="print-positioned-text" key={line.id} style={{
                       left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
-                      transform: placementTransform(line.placement), textAlign: label.style.horizontalAlign,
+                      transform: rotationTransform(line.placement, rotation), textAlign: label.style.horizontalAlign,
                       whiteSpace: 'nowrap',
                       writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
                       fontFamily: line.style.fontFamily,

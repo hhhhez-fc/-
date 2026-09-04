@@ -235,6 +235,8 @@ describe('打印检查', () => {
     const html = renderToStaticMarkup(<PrintReviewDialog
       open
       plan={plan}
+      rotations={{}}
+      onRotateLabel={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}
@@ -255,6 +257,8 @@ describe('打印检查', () => {
     const html = renderToStaticMarkup(<PrintReviewDialog
       open
       plan={plan}
+      rotations={{}}
+      onRotateLabel={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}
@@ -296,6 +300,23 @@ describe('打印检查', () => {
     expect(html).toContain('top:5mm');
     expect(html).toContain('width:40mm');
     expect(html).toContain('height:20mm');
+  });
+
+  it('打印检查可循环旋转文字，并在关闭后清除临时角度', async () => {
+    const user = userEvent.setup();
+    const label = createLabel({ content: 'ROTATE-ME', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+    const rotate = screen.getByRole('button', { name: '旋转第 1 个文字唛头 ROTATE-ME 90°' });
+    expect(screen.getByText('当前 0°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 90°')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '关闭' }));
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+    expect(screen.getByText('当前 0°')).toBeTruthy();
   });
 });
 

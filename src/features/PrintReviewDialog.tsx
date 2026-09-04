@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { solveLabelTextLayout } from '../domain/layout';
 import type { PrintGroup, PrintPlan } from '../domain/printing';
+import type { PrintRotation } from '../domain/printRotation';
+import PrintLabelThumbnail from './PrintLabelThumbnail';
 
 interface PrintReviewDialogProps {
   open: boolean;
   plan: PrintPlan;
+  rotations: Record<string, PrintRotation>;
   onClose: () => void;
   onEditLabel: (id: string) => void;
+  onRotateLabel: (id: string) => void;
   onPrintGroup: (group: PrintGroup) => void;
 }
 
@@ -23,7 +28,15 @@ export async function copyPaperSizeToClipboard(
   }
 }
 
-export default function PrintReviewDialog({ open, plan, onClose, onEditLabel, onPrintGroup }: PrintReviewDialogProps) {
+export default function PrintReviewDialog({
+  open,
+  plan,
+  rotations,
+  onClose,
+  onEditLabel,
+  onRotateLabel,
+  onPrintGroup,
+}: PrintReviewDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [copyStatus, setCopyStatus] = useState('');
@@ -108,32 +121,76 @@ export default function PrintReviewDialog({ open, plan, onClose, onEditLabel, on
               <ol>
                 <li>打开“打印机首选项”，创建与下方完全相同的用户自定义纸张。</li>
                 <li>在系统打印窗口选择该纸张，缩放保持 100%，边距选择“无”。</li>
+                <li>在这里旋转文字；系统打印窗口保持所示自定义纸张方向，不要交换宽高。</li>
                 <li>不要选择 A4 或信纸代替，否则内容会缩放或产生大片留白。</li>
               </ol>
             </aside>
             <p className="print-copy-feedback" role="status" aria-live="polite">{copyStatus}</p>
-            {plan.groups.map((group, index) => (
-              <article key={group.key}>
-                <span className="print-group-index">{String(index + 1).padStart(2, '0')}</span>
-                <div>
-                  <h3>{group.sizeLabel}</h3>
-                  <p>{`1 × 程序生成 ${group.pages.length} 张 = 实际打印 ${group.pages.length} 张`}</p>
-                </div>
-                <div className="print-group-actions">
-                  <button
-                    className="button button-quiet button-compact"
-                    type="button"
-                    aria-label={`复制 ${group.sizeLabel}`}
-                    onClick={() => void copyPaperSize(group)}
-                  >
-                    复制尺寸
-                  </button>
-                  <button className="button button-print" type="button" onClick={() => onPrintGroup(group)}>
-                    打印这一组
-                  </button>
-                </div>
-              </article>
-            ))}
+            {plan.groups.map((group, index) => {
+              const uniquePages = Array.from(
+                new Map(group.pages.map((page) => [page.label.id, page])).values(),
+              );
+              const rotationErrors = uniquePages.flatMap(({ label, preset }) => {
+                if (label.contentType !== 'text') return [];
+                const layout = solveLabelTextLayout(label, preset, rotations[label.id] ?? 0);
+                return layout.ok ? [] : [{ labelId: label.id, error: layout.error }];
+              });
+              const rotationErrorById = new Map(rotationErrors.map((item) => [item.labelId, item.error]));
+              return (
+                <article key={group.key}>
+                  <span className="print-group-index">{String(index + 1).padStart(2, '0')}</span>
+                  <div className="print-group-summary">
+                    <h3>{group.sizeLabel}</h3>
+                    <p>{`1 × 程序生成 ${group.pages.length} 张 = 实际打印 ${group.pages.length} 张`}</p>
+                  </div>
+                  <div className="print-group-actions">
+                    <button
+                      className="button button-quiet button-compact"
+                      type="button"
+                      aria-label={`复制 ${group.sizeLabel}`}
+                      onClick={() => void copyPaperSize(group)}
+                    >
+                      复制尺寸
+                    </button>
+                    <button
+                      className="button button-print"
+                      type="button"
+                      disabled={rotationErrors.length > 0}
+                      onClick={() => onPrintGroup(group)}
+                    >
+                      打印这一组
+                    </button>
+                  </div>
+                  <div className="print-label-previews">
+                    {uniquePages.map(({ label, preset }, labelIndex) => {
+                      const rotation = label.contentType === 'text' ? rotations[label.id] ?? 0 : 0;
+                      const summary = label.content.trim().split(/\r?\n/)[0] || '未填写内容';
+                      const error = rotationErrorById.get(label.id);
+                      return (
+                        <div className="print-label-preview-row" key={label.id}>
+                          <PrintLabelThumbnail label={label} preset={preset} rotation={rotation} />
+                          <div className="print-label-preview-copy">
+                            <strong>{summary}</strong>
+                            {label.contentType === 'text' ? (
+                              <div className="print-rotation-control">
+                                <button
+                                  className="button button-quiet button-compact"
+                                  type="button"
+                                  aria-label={`旋转第 ${labelIndex + 1} 个文字唛头 ${summary} 90°`}
+                                  onClick={() => onRotateLabel(label.id)}
+                                >旋转 90°</button>
+                                <span>当前 {rotation}°</span>
+                              </div>
+                            ) : <span>图片保持原方向</span>}
+                            {error && <span className="print-rotation-error" role="alert">{error}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>

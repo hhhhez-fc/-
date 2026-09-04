@@ -9,7 +9,8 @@ import {
   type TextResizeHandle,
 } from '../domain/pointerDrag';
 import { contentWithUpdatedTextLine, moveSelectedTextLines, updateTextLine } from '../domain/textLines';
-import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset, TextPlacement } from '../domain/labels';
+import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset } from '../domain/labels';
+import { rotationTransform } from '../domain/printRotation';
 import { StyledTextLine } from './StyledText';
 
 interface LabelPreviewProps {
@@ -21,12 +22,6 @@ interface LabelPreviewProps {
   onSelectLine: (id: string) => void;
   onClearLineSelection: () => void;
   onChange: (patch: Partial<LabelRecord>) => void;
-}
-
-function placementTransform(placement: TextPlacement): string {
-  const x = placement.horizontalSnap === 'left' ? '0%' : placement.horizontalSnap === 'right' ? '-100%' : '-50%';
-  const y = placement.verticalSnap === 'top' ? '0%' : placement.verticalSnap === 'bottom' ? '-100%' : '-50%';
-  return `translate(${x}, ${y})`;
 }
 
 interface PrintAreaDragStart {
@@ -285,7 +280,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
             const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
             const frameStyle: CSSProperties = {
               left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
-              transform: placementTransform(line.placement),
+              transform: rotationTransform(line.placement, 0),
             };
             const textStyle: CSSProperties = {
               textAlign: label.style.horizontalAlign,
