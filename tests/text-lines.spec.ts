@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createLabel } from '../src/domain/labels';
-import { createTextLines, syncTextLines } from '../src/domain/textLines';
+import {
+  cloneTextLinesWithFreshIds,
+  createTextLines,
+  moveSelectedTextLines,
+  syncTextLines,
+  updateSelectedTextLines,
+} from '../src/domain/textLines';
 import { createInitialDraft, draftReducer } from '../src/domain/draft';
 import * as textLineDomain from '../src/domain/textLines';
 
@@ -92,5 +98,32 @@ describe('逐行文字模型', () => {
       horizontalSnap: 'free',
       verticalSnap: 'middle',
     });
+  });
+
+  it('批量样式和方向只更新已选行', () => {
+    const lines = createTextLines('A\nB\nC');
+    const next = updateSelectedTextLines(lines, [lines[0].id, lines[2].id], {
+      style: { fontSizePt: 32, italic: true },
+      textOrientation: 'vertical',
+    });
+    expect(next.map((line) => [line.style.fontSizePt, line.textOrientation])).toEqual([
+      [32, 'vertical'], [undefined, 'horizontal'], [32, 'vertical'],
+    ]);
+  });
+
+  it('整组移动保持间距并用共同边界限制位移', () => {
+    const lines = createTextLines('A\nB');
+    lines[0].placement.xPercent = 10;
+    lines[1].placement.xPercent = 90;
+    const next = moveSelectedTextLines(lines, lines.map((line) => line.id), 20, -5);
+    expect(next.map((line) => line.placement.xPercent)).toEqual([20, 100]);
+    expect(next[1].placement.xPercent - next[0].placement.xPercent).toBe(80);
+  });
+
+  it('恢复历史时重建每条文字行 ID', () => {
+    const lines = createTextLines('A\nB');
+    const copy = cloneTextLinesWithFreshIds(lines);
+    expect(copy.map((line) => line.id)).not.toEqual(lines.map((line) => line.id));
+    expect(copy.map((line) => line.text)).toEqual(['A', 'B']);
   });
 });
