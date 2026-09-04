@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import App from '../src/App';
@@ -30,6 +30,33 @@ const stateWithLabel = (content: string) => {
 };
 
 describe('多行文字交互', () => {
+  it('textarea 内移动光标或选中文字只切换活动行，不进入累加选择', async () => {
+    const user = userEvent.setup();
+    render(<App initialState={stateWithLabel('AB\nC')} />);
+
+    const editor = screen.getByPlaceholderText(/FY-01/) as HTMLTextAreaElement;
+    await user.click(editor);
+    editor.setSelectionRange(0, 1);
+    fireEvent.select(editor);
+    fireEvent.keyUp(editor, { key: 'ArrowRight' });
+
+    expect(screen.queryByText('已选 1 行')).toBeNull();
+    expect(screen.getByRole('button', { name: /拖动第 1 行/ }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('只激活一行的字符选区样式保留为局部范围，而不是整行样式', () => {
+    render(<App initialState={stateWithLabel('AB\nC')} />);
+
+    const editor = screen.getByPlaceholderText(/FY-01/) as HTMLTextAreaElement;
+    editor.setSelectionRange(0, 1);
+    fireEvent.select(editor);
+    fireEvent.click(screen.getByRole('button', { name: '粗体' }));
+
+    expect(screen.getByText('已应用 1 段局部样式；修改正文后会自动清除。')).toBeTruthy();
+    expect(screen.getByText('A').style.fontWeight).toBe('400');
+    expect(screen.getByRole('button', { name: /拖动第 1 行/ }).style.fontWeight).toBe('');
+  });
+
   it('连续单击累加文字行，单击打印区域空白清空', async () => {
     const user = userEvent.setup();
     render(<App initialState={stateWithLabel('A\nB\nC')} />);

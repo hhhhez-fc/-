@@ -142,6 +142,7 @@ export default function App({ initialState }: AppProps) {
     setActiveLineId(id);
     setSelectedLineIds((current) => current.includes(id) ? current : [...current, id]);
   }, []);
+  const activateLine = useCallback((id: string) => setActiveLineId(id), []);
   const clearLineSelection = useCallback(() => setSelectedLineIds([]), []);
   const activateLabel = useCallback((id: string) => {
     setSelectedLineIds([]);
@@ -303,6 +304,7 @@ export default function App({ initialState }: AppProps) {
           label={activeLabel}
           activeLineId={resolvedActiveLineId}
           selectedLineIds={selectedLineIds}
+          onActiveLineChange={activateLine}
           onSelectLine={selectLine}
           onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
           onPrintPreview={openActivePrintPreview}
@@ -341,6 +343,7 @@ export default function App({ initialState }: AppProps) {
             preset={activePreset}
             activeLineId={resolvedActiveLineId}
             selectedLineIds={selectedLineIds}
+            onActiveLineChange={activateLine}
             onSelectLine={selectLine}
             onClearLineSelection={clearLineSelection}
             onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}

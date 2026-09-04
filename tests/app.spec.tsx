@@ -193,6 +193,7 @@ describe('逐行预览', () => {
       preset={defaultSizePresets[0]}
       activeLineId={label.textLines[0].id}
       selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
       onSelectLine={() => undefined}
       onClearLineSelection={() => undefined}
       onChange={() => undefined}
@@ -219,6 +220,7 @@ describe('逐行预览', () => {
       preset={preset}
       activeLineId={label.textLines[0].id}
       selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
       onSelectLine={() => undefined}
       onClearLineSelection={() => undefined}
       onChange={() => undefined}
@@ -235,6 +237,7 @@ describe('逐行预览', () => {
       preset={defaultSizePresets[0]}
       activeLineId={label.textLines[0].id}
       selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
       onSelectLine={() => undefined}
       onClearLineSelection={() => undefined}
       onChange={() => undefined}
@@ -320,6 +323,7 @@ describe('右侧样式设置', () => {
       label={label}
       activeLineId={label.textLines[0].id}
       selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
       onSelectLine={() => undefined}
       onChange={() => undefined}
       onPrintPreview={() => undefined}

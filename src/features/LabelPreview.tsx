@@ -17,6 +17,7 @@ interface LabelPreviewProps {
   preset: SizePreset;
   activeLineId: string | null;
   selectedLineIds: string[];
+  onActiveLineChange: (id: string) => void;
   onSelectLine: (id: string) => void;
   onClearLineSelection: () => void;
   onChange: (patch: Partial<LabelRecord>) => void;
@@ -59,7 +60,7 @@ const resizeHandles: Array<{ id: PrintAreaResizeHandle; label: string }> = [
 
 const textResizeHandles: TextResizeHandle[] = ['nw', 'ne', 'se', 'sw'];
 
-export default function LabelPreview({ label, preset, activeLineId, selectedLineIds, onSelectLine, onClearLineSelection, onChange }: LabelPreviewProps) {
+export default function LabelPreview({ label, preset, activeLineId, selectedLineIds, onActiveLineChange, onSelectLine, onClearLineSelection, onChange }: LabelPreviewProps) {
   const paperRef = useRef<HTMLDivElement>(null);
   const contentLayerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<(PointerDragStart & { lineId: string }) | null>(null);
@@ -204,7 +205,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     patchLine(line, { style: { ...line.style, fontSizePt: Math.max(8, Math.min(120, current + direction * amount)) } });
   };
   const startEditing = (line: LabelTextLine) => {
-    onSelectLine(line.id);
+    onActiveLineChange(line.id);
     editStartRef.current = { lineId: line.id, text: line.text };
     setEditingLineId(line.id);
   };

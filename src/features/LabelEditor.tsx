@@ -7,6 +7,7 @@ interface LabelEditorProps {
   label: LabelRecord;
   activeLineId: string | null;
   selectedLineIds: string[];
+  onActiveLineChange: (id: string) => void;
   onSelectLine: (id: string) => void;
   onChange: (patch: Partial<LabelRecord>) => void;
   onPrintPreview: () => void;
@@ -15,7 +16,7 @@ interface LabelEditorProps {
   onDelete: () => void;
 }
 
-export default function LabelEditor({ label, activeLineId, selectedLineIds, onSelectLine, onChange, onPrintPreview, reviewErrors, onDuplicate, onDelete }: LabelEditorProps) {
+export default function LabelEditor({ label, activeLineId, selectedLineIds, onActiveLineChange, onSelectLine, onChange, onPrintPreview, reviewErrors, onDuplicate, onDelete }: LabelEditorProps) {
   const contentError = !label.content.trim() ? '请输入需要打印的唛头内容。' : '';
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const activeLine = label.textLines.find((line) => line.id === activeLineId) ?? label.textLines[0];
@@ -54,7 +55,7 @@ export default function LabelEditor({ label, activeLineId, selectedLineIds, onSe
     setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd });
     const lineIndex = event.currentTarget.value.slice(0, event.currentTarget.selectionStart).split('\n').length - 1;
     const line = label.textLines[lineIndex];
-    if (line) onSelectLine(line.id);
+    if (line) onActiveLineChange(line.id);
   };
   const updateTargetLines = (patch: TextLinePatch) => {
     if (!targetIds.length) return;
