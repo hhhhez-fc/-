@@ -4,6 +4,7 @@ import { createLabel, defaultSizeTypeForBusiness, type LabelPurpose } from './do
 import { recoverDraft, saveDraftSafely } from './domain/storage';
 import LabelEditor from './features/LabelEditor';
 import LabelList from './features/LabelList';
+import SourceHistory from './features/SourceHistory';
 import LabelPreview from './features/LabelPreview';
 import SizeStylePanel from './features/SizeStylePanel';
 import ExcelImporter from './features/ExcelImporter';
@@ -22,6 +23,7 @@ import {
 } from './domain/workspaceLayout';
 import WorkspacePanel from './features/WorkspacePanel';
 import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSizePreview';
+import { restoreRecentLabel, type RecentLabelEntry } from './domain/history';
 
 interface AppProps {
   initialState?: DraftState;
@@ -160,10 +162,46 @@ export default function App({ initialState }: AppProps) {
     setStatus('已删除一条唛头');
   };
 
+  const restoreHistoryEntry = (entry: RecentLabelEntry) => {
+    const restored = restoreRecentLabel(entry);
+    const existingPreset = state.sizePresets.find((candidate) => candidate.id === restored.preset.id);
+    const presetMatchesSnapshot = existingPreset
+      && existingPreset.widthMm === restored.preset.widthMm
+      && existingPreset.heightMm === restored.preset.heightMm
+      && existingPreset.paddingMm === restored.preset.paddingMm
+      && existingPreset.maxFontSize === restored.preset.maxFontSize
+      && existingPreset.minFontSize === restored.preset.minFontSize
+      && existingPreset.paperSize === restored.preset.paperSize;
+    if (existingPreset && !presetMatchesSnapshot) {
+      restored.preset.id = crypto.randomUUID();
+      restored.label.sizePresetId = restored.preset.id;
+    }
+    if (!presetMatchesSnapshot) {
+      dispatch({ type: 'add-size-preset', preset: restored.preset });
+    }
+    clearLineSelection();
+    setActiveLineId(null);
+    dispatch({ type: 'add-label', label: restored.label });
+    setStatus('已从使用记录新增一条唛头');
+  };
+
   const selectedCount = state.selectedLabelIds.length;
   const allSelected = state.labels.length > 0 && selectedCount === state.labels.length;
+  const recordPrintableLabels = (ids?: string[]) => {
+    const requestedIds = ids ? new Set(ids) : null;
+    const recordedIds = new Set<string>();
+    const entries = printPlan.groups.flatMap((group) => group.pages).flatMap(({ label, preset }) => {
+      if (recordedIds.has(label.id) || (requestedIds && !requestedIds.has(label.id))) return [];
+      recordedIds.add(label.id);
+      return [{ label, preset }];
+    });
+    if (entries.length > 0) {
+      dispatch({ type: 'record-recent-labels', entries, previewedAt: Date.now() });
+    }
+  };
   const openActivePrintPreview = () => {
     if (!activeLabel || activeReviewErrors.length > 0) return;
+    recordPrintableLabels([activeLabel.id]);
     setPrintDialogOpen(true);
   };
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
@@ -236,16 +274,7 @@ export default function App({ initialState }: AppProps) {
         <span>Excel、图片识别和草稿保存都在当前浏览器中完成。</span>
       </aside>
 
-      <section className="source-history" aria-labelledby="source-history-title">
-        <div>
-          <h3 id="source-history-title">使用过的唛头</h3>
-          <p>最近使用的唛头会保存在录入来源中。</p>
-        </div>
-        <div className="source-history-empty">
-          <strong>暂时没有使用记录</strong>
-          <span>完成打印后，这里会显示最近使用的唛头。</span>
-        </div>
-      </section>
+      <SourceHistory entries={state.recentLabels} onRestore={restoreHistoryEntry} />
     </>,
     records: <>
       <div className="panel-heading panel-drag-handle records-heading" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动唛头清单板块；左右方向键换位">
@@ -401,7 +430,10 @@ export default function App({ initialState }: AppProps) {
               setStatus('已恢复默认工作区布局');
             }}
           >恢复默认布局</button>
-          <button className="button button-print" type="button" disabled={state.labels.length === 0} onClick={() => setPrintDialogOpen(true)}>
+          <button className="button button-print" type="button" disabled={state.labels.length === 0} onClick={() => {
+            recordPrintableLabels();
+            setPrintDialogOpen(true);
+          }}>
             检查并打印
           </button>
         </div>

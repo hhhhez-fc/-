@@ -11,6 +11,12 @@ import {
 } from './labels';
 import { syncTextLines } from './textLines';
 import {
+  hydrateRecentLabels,
+  recordRecentLabels,
+  type RecentLabelEntry,
+  type RecentLabelInput,
+} from './history';
+import {
   DEFAULT_WORKSPACE_LAYOUT,
   hydrateWorkspaceLayout,
   resizeWorkspacePanel,
@@ -41,6 +47,7 @@ export interface DraftState {
   activeLabelId: string | null;
   selectedLabelIds: string[];
   recentSizes: SizePreset[];
+  recentLabels: RecentLabelEntry[];
   lastPrintedSize: LastPrintedSize | null;
   workspaceLayout: WorkspaceLayout;
 }
@@ -82,7 +89,10 @@ export function resolveDefaultNewLabelPreset(
   };
 }
 
-export function createInitialDraft(lastPrintedSize: LastPrintedSize | null = null): DraftState {
+export function createInitialDraft(
+  lastPrintedSize: LastPrintedSize | null = null,
+  recentLabels: RecentLabelEntry[] = [],
+): DraftState {
   const normalizedLastPrintedSize = normalizeLastPrintedSize(lastPrintedSize);
   const basePresets = defaultSizePresets.map((preset) => ({ ...preset }));
   const draftSeed = {
@@ -115,6 +125,7 @@ export function createInitialDraft(lastPrintedSize: LastPrintedSize | null = nul
     activeLabelId: blankLabel.id,
     selectedLabelIds: [],
     recentSizes: [],
+    recentLabels: hydrateRecentLabels(recentLabels),
     lastPrintedSize: normalizedLastPrintedSize,
     workspaceLayout: {
       version: 2,
@@ -140,6 +151,7 @@ export type DraftAction =
   | { type: 'update-size-preset'; id: string; patch: Partial<Omit<SizePreset, 'id'>> }
   | { type: 'remove-size-preset'; id: string }
   | { type: 'remember-size'; preset: SizePreset }
+  | { type: 'record-recent-labels'; entries: RecentLabelInput[]; previewedAt: number }
   | { type: 'remember-printed-size'; widthMm: number; heightMm: number }
   | { type: 'set-panel-order'; order: WorkspacePanelId[] }
   | { type: 'resize-panel'; id: WorkspacePanelId; patch: Partial<WorkspacePanelSize> }
@@ -262,6 +274,11 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
       ].slice(0, 8);
       return { ...state, recentSizes };
     }
+    case 'record-recent-labels':
+      return {
+        ...state,
+        recentLabels: recordRecentLabels(state.recentLabels, action.entries, action.previewedAt),
+      };
     case 'remember-printed-size': {
       const lastPrintedSize = normalizeLastPrintedSize({ widthMm: action.widthMm, heightMm: action.heightMm });
       return lastPrintedSize ? { ...state, lastPrintedSize } : state;
@@ -291,6 +308,6 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
         },
       };
     case 'clear-draft':
-      return createInitialDraft(state.lastPrintedSize);
+      return createInitialDraft(state.lastPrintedSize, state.recentLabels);
   }
 }

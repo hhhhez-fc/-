@@ -1,16 +1,49 @@
+// @vitest-environment jsdom
+
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
 import { createInitialDraft } from '../src/domain/draft';
 import { createLabel, defaultSizePresets } from '../src/domain/labels';
+import { recordRecentLabels, type RecentLabelInput } from '../src/domain/history';
+import { DRAFT_STORAGE_KEY } from '../src/domain/storage';
 import LabelPreview from '../src/features/LabelPreview';
 import ImageCropSelector from '../src/features/ImageCropSelector';
 import PrintReviewDialog, * as printReviewModule from '../src/features/PrintReviewDialog';
 import PrintPages from '../src/features/PrintPages';
 import SizeStylePanel from '../src/features/SizeStylePanel';
 import LabelEditor from '../src/features/LabelEditor';
+import SourceHistory from '../src/features/SourceHistory';
 import { createPrintPlan } from '../src/domain/printing';
 import { buildFontSizePreviewLabel } from '../src/domain/fontSizePreview';
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  window.localStorage.clear();
+});
+
+async function expectStoredHistory(expectedContents: string[]) {
+  await waitFor(() => {
+    const saved = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    expect(saved).not.toBeNull();
+    expect(JSON.parse(saved!).recentLabels.map((entry: { label: { content: string } }) => entry.label.content))
+      .toEqual(expectedContents);
+  });
+}
+
+const recentInput = (content: string, preset = defaultSizePresets[0]): RecentLabelInput => ({
+  label: createLabel({
+    content,
+    quantity: 2,
+    source: 'manual',
+    sizePresetId: preset.id,
+    needsReview: false,
+  }),
+  preset: { ...preset },
+});
 
 describe('唛头打印工作台', () => {
   it('首次打开自动创建空白唛头，并可在预览内直接输入', () => {
@@ -34,7 +67,7 @@ describe('唛头打印工作台', () => {
 
     expect(html).not.toContain('aria-labelledby="history-title"');
     expect(html).toContain('使用过的唛头');
-    expect(html).toContain('最近使用的唛头会保存在录入来源中');
+    expect(html).toContain('进入打印预览后自动保存最近 20 条');
     expect(html.match(/data-testid="panel-drag-handle"/g)).toHaveLength(3);
     expect(html.match(/class="[^"]*panel-drag-handle[^"]*"/g)).toHaveLength(3);
     expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*宽度"/g)).toHaveLength(3);
@@ -72,7 +105,106 @@ describe('唛头打印工作台', () => {
   });
 });
 
+describe('使用过的唛头', () => {
+  it('显示空状态，并通过原生按钮恢复历史条目', async () => {
+    const user = userEvent.setup();
+    const onRestore = vi.fn();
+    const entry = recordRecentLabels([], [recentInput('FY-01\nMADE IN CHINA')], 1000)[0];
+    const { rerender } = render(<SourceHistory entries={[]} onRestore={onRestore} />);
+
+    expect(screen.getByText('暂时没有使用记录')).toBeTruthy();
+    rerender(<SourceHistory entries={[entry]} onRestore={onRestore} />);
+    expect(screen.getByText('FY-01')).toBeTruthy();
+    expect(screen.getByText('100 × 60 mm · 2 件')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '再次使用' }));
+    expect(onRestore).toHaveBeenCalledWith(entry);
+  });
+
+  it('恢复时对物理和布局字段相同的同 ID 预设直接复用', async () => {
+    const user = userEvent.setup();
+    const entry = recordRecentLabels([], [recentInput('REUSE-PRESET')], 1000)[0];
+    const state = createInitialDraft(null, [entry]);
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '再次使用' }));
+    expect(screen.getByText('已从使用记录新增一条唛头')).toBeTruthy();
+
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(DRAFT_STORAGE_KEY) ?? '{}');
+      const restored = saved.labels?.find((label: { content: string }) => label.content === 'REUSE-PRESET');
+      expect(restored?.id).not.toBe(entry.label.id);
+      expect(restored?.textLines.map((line: { id: string }) => line.id)).not.toEqual(entry.label.textLines.map((line) => line.id));
+      expect(restored?.sizePresetId).toBe('large');
+      expect(saved.sizePresets).toHaveLength(2);
+    });
+  });
+
+  it('恢复时为字段已变更的同 ID 预设创建新 ID 并同步唛头引用', async () => {
+    const user = userEvent.setup();
+    const entry = recordRecentLabels([], [recentInput('SNAPSHOT-SIZE')], 1000)[0];
+    const initial = createInitialDraft(null, [entry]);
+    const state = {
+      ...initial,
+      sizePresets: initial.sizePresets.map((preset) => preset.id === 'large'
+        ? { ...preset, widthMm: 88 }
+        : preset),
+    };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '再次使用' }));
+
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(DRAFT_STORAGE_KEY) ?? '{}');
+      const restored = saved.labels?.find((label: { content: string }) => label.content === 'SNAPSHOT-SIZE');
+      expect(restored?.sizePresetId).not.toBe('large');
+      expect(saved.sizePresets.find((preset: { id: string }) => preset.id === 'large').widthMm).toBe(88);
+      expect(saved.sizePresets.find((preset: { id: string }) => preset.id === restored?.sizePresetId))
+        .toMatchObject({ widthMm: 100, heightMm: 60 });
+      expect(saved.sizePresets).toHaveLength(3);
+    });
+  });
+});
+
 describe('打印检查', () => {
+  it('单条打印预览只记录当前合法唛头', async () => {
+    const user = userEvent.setup();
+    const active = createLabel({ content: 'ACTIVE', quantity: 1, source: 'manual', needsReview: false });
+    const other = createLabel({ content: 'OTHER', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [active, other], activeLabelId: active.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    await expectStoredHistory(['ACTIVE']);
+  });
+
+  it('顶部打印检查记录所有合法唛头，并忽略阻塞项和重复打印页', async () => {
+    const user = userEvent.setup();
+    const first = createLabel({ content: 'FIRST', quantity: 1, source: 'manual', needsReview: false });
+    const blocked = createLabel({ content: '', quantity: 1, source: 'manual', needsReview: false });
+    const second = createLabel({ content: 'SECOND', quantity: 2, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [first, blocked, second], activeLabelId: first.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '检查并打印' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    await expectStoredHistory(['SECOND', 'FIRST']);
+  });
+
+  it('本机存储写入失败不阻止打开预览', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+    const label = createLabel({ content: 'PRINTABLE', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
   it('把精确毫米尺寸写入剪贴板，并报告浏览器拒绝写入', async () => {
     const clipboard = printReviewModule as unknown as {
       copyPaperSizeToClipboard: (

@@ -6,6 +6,7 @@ import {
 } from './draft';
 import { defaultStyle, type LabelRecord } from './labels';
 import { createTextLines } from './textLines';
+import { hydrateRecentLabels } from './history';
 import { hydrateWorkspaceLayout } from './workspaceLayout';
 
 export const DRAFT_STORAGE_KEY = 'label-printing-local:draft:v1';
@@ -87,6 +88,7 @@ function hydrateDraft(parsed: DraftState): DraftState {
     sizePresets,
     lastPrintedSize,
     recentSizes: Array.isArray(parsed.recentSizes) ? parsed.recentSizes.map((preset) => ({ ...preset })) : [],
+    recentLabels: hydrateRecentLabels((parsed as Partial<DraftState>).recentLabels),
     selectedLabelIds,
     activeLabelId: typeof parsed.activeLabelId === 'string' && validIds.has(parsed.activeLabelId)
       ? parsed.activeLabelId

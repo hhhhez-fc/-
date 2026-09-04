@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLabel, defaultStyle } from '../src/domain/labels';
 import { createInitialDraft, draftReducer, type DraftState } from '../src/domain/draft';
+import type { RecentLabelInput } from '../src/domain/history';
 import { loadDraft, recoverDraft, saveDraft, saveDraftSafely } from '../src/domain/storage';
+
+const historyInput = (content: string): RecentLabelInput => ({
+  label: createLabel({ content, quantity: 1, source: 'manual', needsReview: false }),
+  preset: { ...createInitialDraft().sizePresets[0] },
+});
 
 describe('草稿状态', () => {
   it('新增记录后将其设为当前记录并保留在列表中', () => {
@@ -91,6 +97,18 @@ describe('草稿状态', () => {
 
     expect(cleared.lastPrintedSize).toEqual({ widthMm: 92, heightMm: 58 });
     expect(activePreset).toMatchObject({ widthMm: 92, heightMm: 58 });
+  });
+
+  it('清空草稿保留最近预览历史', () => {
+    const state = draftReducer(createInitialDraft(), {
+      type: 'record-recent-labels',
+      entries: [historyInput('FY-01')],
+      previewedAt: 1000,
+    });
+
+    expect(state.recentLabels).toHaveLength(1);
+    expect(draftReducer(state, { type: 'clear-draft' }).recentLabels).toEqual(state.recentLabels);
+    expect(draftReducer(state, { type: 'clear-draft' }).recentLabels).not.toBe(state.recentLabels);
   });
 
   it('可收起板块并保留原有尺寸', () => {
@@ -268,6 +286,19 @@ describe('本地草稿存储', () => {
     const storage = { getItem: () => JSON.stringify(oldDraft) };
 
     expect(loadDraft(storage)).toMatchObject({ selectedLabelIds: [], business: '' });
+  });
+
+  it('读取旧草稿时缺失的最近预览历史补为空列表', () => {
+    const oldDraft = createInitialDraft() as unknown as Record<string, unknown>;
+    delete oldDraft.recentLabels;
+
+    expect(loadDraft({ getItem: () => JSON.stringify(oldDraft) })?.recentLabels).toEqual([]);
+  });
+
+  it('损坏历史条目在读取草稿时被过滤', () => {
+    const stored = { ...createInitialDraft(), recentLabels: [{ bad: true }] };
+
+    expect(loadDraft({ getItem: () => JSON.stringify(stored) })?.recentLabels).toEqual([]);
   });
 
   it('读取草稿时丢弃超出可打印范围的上次打印尺寸', () => {
