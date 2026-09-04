@@ -23,7 +23,7 @@ import {
 } from './domain/workspaceLayout';
 import WorkspacePanel from './features/WorkspacePanel';
 import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSizePreview';
-import { restoreRecentLabel, type RecentLabelEntry } from './domain/history';
+import { hasSameSizePresetSnapshot, restoreRecentLabel, type RecentLabelEntry } from './domain/history';
 
 interface AppProps {
   initialState?: DraftState;
@@ -165,13 +165,9 @@ export default function App({ initialState }: AppProps) {
   const restoreHistoryEntry = (entry: RecentLabelEntry) => {
     const restored = restoreRecentLabel(entry);
     const existingPreset = state.sizePresets.find((candidate) => candidate.id === restored.preset.id);
-    const presetMatchesSnapshot = existingPreset
-      && existingPreset.widthMm === restored.preset.widthMm
-      && existingPreset.heightMm === restored.preset.heightMm
-      && existingPreset.paddingMm === restored.preset.paddingMm
-      && existingPreset.maxFontSize === restored.preset.maxFontSize
-      && existingPreset.minFontSize === restored.preset.minFontSize
-      && existingPreset.paperSize === restored.preset.paperSize;
+    const presetMatchesSnapshot = Boolean(
+      existingPreset && hasSameSizePresetSnapshot(existingPreset, restored.preset),
+    );
     if (existingPreset && !presetMatchesSnapshot) {
       restored.preset.id = crypto.randomUUID();
       restored.label.sizePresetId = restored.preset.id;

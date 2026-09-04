@@ -5,7 +5,13 @@ import type { RecentLabelInput } from '../src/domain/history';
 import { loadDraft, recoverDraft, saveDraft, saveDraftSafely } from '../src/domain/storage';
 
 const historyInput = (content: string): RecentLabelInput => ({
-  label: createLabel({ content, quantity: 1, source: 'manual', needsReview: false }),
+  label: createLabel({
+    content,
+    quantity: 1,
+    source: 'manual',
+    sizePresetId: createInitialDraft().sizePresets[0].id,
+    needsReview: false,
+  }),
   preset: { ...createInitialDraft().sizePresets[0] },
 });
 

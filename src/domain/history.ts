@@ -14,6 +14,40 @@ export interface RecentLabelEntry extends RecentLabelInput {
 
 export const MAX_RECENT_LABELS = 20;
 
+type SizePresetSnapshot = Pick<
+  SizePreset,
+  'widthMm' | 'heightMm' | 'paddingMm' | 'maxFontSize' | 'minFontSize' | 'paperSize'
+>;
+
+export function sizePresetSnapshot(preset: SizePreset): SizePresetSnapshot {
+  return {
+    widthMm: preset.widthMm,
+    heightMm: preset.heightMm,
+    paddingMm: preset.paddingMm,
+    maxFontSize: preset.maxFontSize,
+    minFontSize: preset.minFontSize,
+    paperSize: preset.paperSize,
+  };
+}
+
+export function hasSameSizePresetSnapshot(first: SizePreset, second: SizePreset): boolean {
+  return JSON.stringify(sizePresetSnapshot(first)) === JSON.stringify(sizePresetSnapshot(second));
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])]),
+  );
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
+
 function cloneLabel(label: LabelRecord): LabelRecord {
   return {
     id: label.id,
@@ -47,7 +81,7 @@ function clonePreset(preset: SizePreset): SizePreset {
 }
 
 function signatureFor({ label, preset }: RecentLabelInput): string {
-  return JSON.stringify({
+  return stableStringify({
     content: label.content,
     quantity: label.quantity,
     sides: label.sides,
@@ -59,14 +93,7 @@ function signatureFor({ label, preset }: RecentLabelInput): string {
     printArea: label.printArea,
     textLines: label.textLines.map(({ id: _id, ...line }) => line),
     imageFallback: label.imageFallback,
-    size: {
-      widthMm: preset.widthMm,
-      heightMm: preset.heightMm,
-      paddingMm: preset.paddingMm,
-      maxFontSize: preset.maxFontSize,
-      minFontSize: preset.minFontSize,
-      paperSize: preset.paperSize,
-    },
+    size: sizePresetSnapshot(preset),
   });
 }
 
@@ -147,19 +174,23 @@ export function recordRecentLabels(
 
 export function restoreRecentLabel(entry: RecentLabelEntry): RecentLabelInput {
   const label = cloneLabel(entry.label);
+  const preset = clonePreset(entry.preset);
   return {
     label: {
       ...label,
       id: crypto.randomUUID(),
+      sizePresetId: preset.id,
       textLines: cloneTextLinesWithFreshIds(label.textLines),
     },
-    preset: clonePreset(entry.preset),
+    preset,
   };
 }
 
 export function hydrateRecentLabels(value: unknown): RecentLabelEntry[] {
   if (!Array.isArray(value)) return [];
   const hydrated: RecentLabelEntry[] = [];
+  const seenIds = new Set<string>();
+  const seenSignatures = new Set<string>();
   for (const candidate of value) {
     if (hydrated.length >= MAX_RECENT_LABELS) break;
     if (!isRecord(candidate)) continue;
@@ -169,10 +200,16 @@ export function hydrateRecentLabels(value: unknown): RecentLabelEntry[] {
       || !Number.isFinite(entry.previewedAt)
       || Number(entry.previewedAt) < 0
       || !isValidLabel(entry.label)
-      || !isValidPreset(entry.preset)) continue;
+      || !isValidPreset(entry.preset)
+      || entry.label.sizePresetId !== entry.preset.id) continue;
     try {
       const cloned = cloneEntry(entry as RecentLabelEntry);
-      if (signatureFor(cloned) === cloned.signature) hydrated.push(cloned);
+      if (signatureFor(cloned) !== cloned.signature
+        || seenIds.has(cloned.id)
+        || seenSignatures.has(cloned.signature)) continue;
+      seenIds.add(cloned.id);
+      seenSignatures.add(cloned.signature);
+      hydrated.push(cloned);
     } catch {
       // Ignore a single corrupt history item without discarding the rest of the draft.
     }
