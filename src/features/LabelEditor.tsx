@@ -1,12 +1,13 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import type { InlineTextStyle, LabelRecord } from '../domain/labels';
 import { buildImmediateTextStylePatch } from '../domain/richText';
-import { updateTextLine } from '../domain/textLines';
+import { updateSelectedTextLines, type TextLinePatch } from '../domain/textLines';
 
 interface LabelEditorProps {
   label: LabelRecord;
   activeLineId: string | null;
-  onActiveLineChange: (id: string) => void;
+  selectedLineIds: string[];
+  onSelectLine: (id: string) => void;
   onChange: (patch: Partial<LabelRecord>) => void;
   onPrintPreview: () => void;
   reviewErrors: string[];
@@ -14,7 +15,7 @@ interface LabelEditorProps {
   onDelete: () => void;
 }
 
-export default function LabelEditor({ label, activeLineId, onActiveLineChange, onChange, onPrintPreview, reviewErrors, onDuplicate, onDelete }: LabelEditorProps) {
+export default function LabelEditor({ label, activeLineId, selectedLineIds, onSelectLine, onChange, onPrintPreview, reviewErrors, onDuplicate, onDelete }: LabelEditorProps) {
   const contentError = !label.content.trim() ? '请输入需要打印的唛头内容。' : '';
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const activeLine = label.textLines.find((line) => line.id === activeLineId) ?? label.textLines[0];
@@ -27,6 +28,7 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
     underline: activeLine?.style.underline,
   });
   const selectedCount = Math.max(0, selection.end - selection.start);
+  const targetIds = selectedLineIds.length ? selectedLineIds : activeLine ? [activeLine.id] : [];
   useEffect(() => {
     setPartialStyle({
       fontFamily: activeLine?.style.fontFamily ?? label.style.fontFamily,
@@ -52,12 +54,20 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
     setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd });
     const lineIndex = event.currentTarget.value.slice(0, event.currentTarget.selectionStart).split('\n').length - 1;
     const line = label.textLines[lineIndex];
-    if (line) onActiveLineChange(line.id);
+    if (line) onSelectLine(line.id);
+  };
+  const updateTargetLines = (patch: TextLinePatch) => {
+    if (!targetIds.length) return;
+    onChange({ textLines: updateSelectedTextLines(label.textLines, targetIds, patch) });
   };
   const updatePartialStyle = (patch: InlineTextStyle) => {
     if (!activeLine) return;
     const next = { ...partialStyle, ...patch };
     setPartialStyle(next);
+    if (selectedLineIds.length) {
+      updateTargetLines({ style: patch });
+      return;
+    }
     onChange(buildImmediateTextStylePatch(label, activeLine.id, selection, next));
   };
   return (
@@ -88,13 +98,15 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
         {label.textLines.map((line, index) => <button
           type="button"
           key={line.id}
-          aria-pressed={line.id === activeLine?.id}
-          onClick={() => onActiveLineChange(line.id)}
+          aria-pressed={selectedLineIds.includes(line.id)}
+          onClick={() => onSelectLine(line.id)}
         ><b>{String(index + 1).padStart(2, '0')}</b><span>{line.text || '空行'}</span></button>)}
       </div>
       <fieldset className="partial-style-editor">
-        <legend>第 {activeLineIndex + 1} 行 / 选中文字样式</legend>
-        <p>{selectedCount ? `已选择 ${selectedCount} 个字符，修改后立即生效` : `未选择字符，将修改第 ${activeLineIndex + 1} 行整体；修改后立即生效`}</p>
+        <legend>{selectedLineIds.length ? `已选 ${selectedLineIds.length} 行` : `第 ${activeLineIndex + 1} 行 / 选中文字样式`}</legend>
+        <p>{selectedLineIds.length
+          ? '修改会立即应用到所选文字行；修改后立即生效'
+          : selectedCount ? `已选择 ${selectedCount} 个字符，修改后立即生效` : `未选择字符，将修改第 ${activeLineIndex + 1} 行整体；修改后立即生效`}</p>
         <div className="partial-style-controls">
           <label className="field"><span>字体</span><select value={partialStyle.fontFamily} onChange={(event) => updatePartialStyle({ fontFamily: event.target.value })}>
             <option value={'Arial, "Microsoft YaHei", sans-serif'}>黑体 / Arial</option>
@@ -106,14 +118,15 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
           </select></label>
           <label className="field"><span>字号（pt）</span><input type="number" min="8" max="120" value={partialStyle.fontSizePt ?? 32} onChange={(event) => updatePartialStyle({ fontSizePt: Number(event.target.value) })} /></label>
         </div>
-        {activeLine && <label className="field line-orientation"><span>本行方向</span><select
+        {activeLine && <label className="field line-orientation"><span>{selectedLineIds.length ? '所选行方向' : '本行方向'}</span><select
+          aria-label={selectedLineIds.length ? '所选行方向' : '本行方向'}
           value={activeLine.textOrientation}
-          onChange={(event) => onChange({ textLines: updateTextLine(label.textLines, activeLine.id, { textOrientation: event.target.value as 'horizontal' | 'vertical' }) })}
+          onChange={(event) => updateTargetLines({ textOrientation: event.target.value as 'horizontal' | 'vertical' })}
         ><option value="horizontal">横排</option><option value="vertical">竖排</option></select></label>}
         <div className="partial-style-toggles">
-          <label><input type="checkbox" checked={partialStyle.fontWeight === 700} onChange={(event) => updatePartialStyle({ fontWeight: event.target.checked ? 700 : 400 })} />粗体</label>
-          <label><input type="checkbox" checked={Boolean(partialStyle.italic)} onChange={(event) => updatePartialStyle({ italic: event.target.checked })} />斜体</label>
-          <label><input type="checkbox" checked={Boolean(partialStyle.underline)} onChange={(event) => updatePartialStyle({ underline: event.target.checked })} />下划线</label>
+          <button type="button" aria-label="粗体" aria-pressed={partialStyle.fontWeight === 700} onClick={() => updatePartialStyle({ fontWeight: partialStyle.fontWeight === 700 ? 400 : 700 })}>粗体</button>
+          <button type="button" aria-label="斜体" aria-pressed={Boolean(partialStyle.italic)} onClick={() => updatePartialStyle({ italic: !partialStyle.italic })}>斜体</button>
+          <button type="button" aria-label="下划线" aria-pressed={Boolean(partialStyle.underline)} onClick={() => updatePartialStyle({ underline: !partialStyle.underline })}>下划线</button>
         </div>
         {label.textStyleRanges.length > 0 && <small>已应用 {label.textStyleRanges.length} 段局部样式；修改正文后会自动清除。</small>}
       </fieldset>

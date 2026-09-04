@@ -192,7 +192,9 @@ describe('逐行预览', () => {
       label={label}
       preset={defaultSizePresets[0]}
       activeLineId={label.textLines[0].id}
-      onActiveLineChange={() => undefined}
+      selectedLineIds={[label.textLines[0].id]}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
       onChange={() => undefined}
     />);
 
@@ -216,7 +218,9 @@ describe('逐行预览', () => {
       label={label}
       preset={preset}
       activeLineId={label.textLines[0].id}
-      onActiveLineChange={() => undefined}
+      selectedLineIds={[label.textLines[0].id]}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
       onChange={() => undefined}
     />);
 
@@ -230,7 +234,9 @@ describe('逐行预览', () => {
       label={label}
       preset={defaultSizePresets[0]}
       activeLineId={label.textLines[0].id}
-      onActiveLineChange={() => undefined}
+      selectedLineIds={[label.textLines[0].id]}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
       onChange={() => undefined}
     />);
 
@@ -313,7 +319,8 @@ describe('右侧样式设置', () => {
     const html = renderToStaticMarkup(<LabelEditor
       label={label}
       activeLineId={label.textLines[0].id}
-      onActiveLineChange={() => undefined}
+      selectedLineIds={[label.textLines[0].id]}
+      onSelectLine={() => undefined}
       onChange={() => undefined}
       onPrintPreview={() => undefined}
       reviewErrors={[]}

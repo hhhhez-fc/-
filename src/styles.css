@@ -293,7 +293,8 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .partial-style-editor p, .partial-style-editor small { margin: 0; color: var(--color-muted); font-size: .66rem; line-height: 1.4; }
 .partial-style-controls { display: grid; grid-template-columns: 1.4fr .7fr; gap: .55rem; }
 .partial-style-toggles { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
-.partial-style-toggles label { display: inline-flex; align-items: center; gap: .25rem; font-size: .68rem; }
+.partial-style-toggles button { min-height: 1.85rem; padding: .25rem .45rem; color: var(--color-ink); background: #fff; border: 1px solid #858c86; border-radius: var(--radius-sm); font-size: .68rem; font-weight: 700; }
+.partial-style-toggles button[aria-pressed="true"] { color: #fff; background: var(--color-ink); border-color: var(--color-ink); }
 .line-selector { display: flex; gap: .35rem; margin-top: .7rem; padding-bottom: .2rem; overflow-x: auto; scrollbar-gutter: stable; }
 .line-selector button { display: grid; grid-template-columns: auto minmax(3rem,8rem); gap: .35rem; align-items: center; min-height: 2rem; padding: .3rem .45rem; color: var(--color-ink); background: #fff; border: 1px solid #858c86; text-align: left; }
 .line-selector button[aria-pressed="true"] { color: #fff; background: var(--color-ink); border-color: var(--color-ink); }
@@ -343,7 +344,8 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .print-positioned-text { position: absolute; display: block; max-width: 100%; max-height: 100%; margin: 0; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .text-line-frame { position: absolute; z-index: 1; display: block; max-width: 100%; max-height: 100%; outline: 1px dashed rgba(11,101,194,.72); outline-offset: .18rem; }
 .text-line-frame:hover { outline-style: solid; }
-.text-line-frame.is-active-line { z-index: 2; outline: 2px solid var(--color-focus); outline-offset: .24rem; }
+.text-line-frame.is-selected-line { z-index: 2; outline: 2px solid var(--color-focus); outline-offset: .24rem; }
+.text-line-frame.is-active-line { box-shadow: 0 0 0 3px rgba(11,101,194,.18); }
 .text-line-frame.is-editing-line { z-index: 3; outline: 0; }
 .draggable-text { position: relative; display: block; max-width: 100%; max-height: 100%; margin: 0; padding: 0; color: inherit; background: transparent; border: 0; cursor: grab; touch-action: none; white-space: pre-wrap; overflow-wrap: anywhere; }
 .draggable-text.is-dragging { cursor: grabbing; }

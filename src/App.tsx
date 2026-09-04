@@ -41,6 +41,7 @@ export default function App({ initialState }: AppProps) {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const [selectedLineIds, setSelectedLineIds] = useState<string[]>([]);
   const [fontSizePreview, setFontSizePreview] = useState<null | { labelId: string; choice: FontSizeChoice }>(null);
   const [panelDropTarget, setPanelDropTarget] = useState<WorkspacePanelDropTarget | null>(null);
   const saveFailureRef = useRef(false);
@@ -64,6 +65,15 @@ export default function App({ initialState }: AppProps) {
   const resolvedActiveLineId = activeLabel?.textLines.some((line) => line.id === activeLineId)
     ? activeLineId
     : activeLabel?.textLines[0]?.id ?? null;
+  const activeTextLineIds = activeLabel?.textLines.map((line) => line.id).join(',') ?? '';
+
+  useEffect(() => {
+    const availableIds = new Set(activeLabel?.textLines.map((line) => line.id) ?? []);
+    setSelectedLineIds((current) => {
+      const next = current.filter((id) => availableIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [activeLabel?.id, activeTextLineIds]);
 
   useEffect(() => {
     document.title = '唛头打印工作台';
@@ -120,13 +130,31 @@ export default function App({ initialState }: AppProps) {
       sizePresetId: defaultNewLabelPreset.id,
       needsReview: false,
     });
+    clearLineSelection();
+    setActiveLineId(null);
     dispatch({ type: 'add-label', label });
     setStatus('已新增一条手动唛头');
   };
 
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
   const closePrintDialog = useCallback(() => setPrintDialogOpen(false), []);
+  const selectLine = useCallback((id: string) => {
+    setActiveLineId(id);
+    setSelectedLineIds((current) => current.includes(id) ? current : [...current, id]);
+  }, []);
+  const clearLineSelection = useCallback(() => setSelectedLineIds([]), []);
+  const activateLabel = useCallback((id: string) => {
+    setSelectedLineIds([]);
+    setActiveLineId(null);
+    dispatch({ type: 'set-active-label', id });
+  }, []);
+  const duplicateLabel = useCallback((id: string) => {
+    clearLineSelection();
+    setActiveLineId(null);
+    dispatch({ type: 'duplicate-label', id });
+  }, [clearLineSelection]);
   const deleteLabel = (id: string) => {
+    if (id === state.activeLabelId) clearLineSelection();
     dispatch({ type: 'delete-label', id });
     setStatus('已删除一条唛头');
   };
@@ -178,6 +206,8 @@ export default function App({ initialState }: AppProps) {
             if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
               dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
             }
+            clearLineSelection();
+            setActiveLineId(null);
             dispatch({ type: 'import-labels', labels });
           }}
           onStatus={setStatus}
@@ -189,6 +219,8 @@ export default function App({ initialState }: AppProps) {
             if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
               dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
             }
+            clearLineSelection();
+            setActiveLineId(null);
             dispatch({ type: 'import-labels', labels });
           }}
           onStatus={setStatus}
@@ -226,10 +258,10 @@ export default function App({ initialState }: AppProps) {
         labels={state.labels}
         activeLabelId={state.activeLabelId}
         selectedLabelIds={state.selectedLabelIds}
-        onActivate={(id) => dispatch({ type: 'set-active-label', id })}
+        onActivate={activateLabel}
         onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
         onQuantityChange={(id, quantity) => dispatch({ type: 'update-label', id, patch: { quantity } })}
-        onDuplicate={(id) => dispatch({ type: 'duplicate-label', id })}
+        onDuplicate={duplicateLabel}
         onDelete={deleteLabel}
       />
       {state.labels.length > 0 && (
@@ -254,6 +286,8 @@ export default function App({ initialState }: AppProps) {
                 message: '删除后无法撤销，未选中的记录不受影响。',
                 confirmLabel: '批量删除',
                 action: () => {
+                  clearLineSelection();
+                  setActiveLineId(null);
                   state.selectedLabelIds.forEach((id) => dispatch({ type: 'delete-label', id }));
                   setStatus(`已删除 ${selectedCount} 条唛头`);
                 },
@@ -268,11 +302,12 @@ export default function App({ initialState }: AppProps) {
         <LabelEditor
           label={activeLabel}
           activeLineId={resolvedActiveLineId}
-          onActiveLineChange={setActiveLineId}
+          selectedLineIds={selectedLineIds}
+          onSelectLine={selectLine}
           onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
           onPrintPreview={openActivePrintPreview}
           reviewErrors={activeReviewErrors}
-          onDuplicate={() => dispatch({ type: 'duplicate-label', id: activeLabel.id })}
+          onDuplicate={() => duplicateLabel(activeLabel.id)}
           onDelete={() => deleteLabel(activeLabel.id)}
         />
       )}
@@ -305,7 +340,9 @@ export default function App({ initialState }: AppProps) {
             label={previewLabel ?? activeLabel}
             preset={activePreset}
             activeLineId={resolvedActiveLineId}
-            onActiveLineChange={setActiveLineId}
+            selectedLineIds={selectedLineIds}
+            onSelectLine={selectLine}
+            onClearLineSelection={clearLineSelection}
             onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
           />
         </>
@@ -343,6 +380,8 @@ export default function App({ initialState }: AppProps) {
                 message: `将删除 ${state.labels.length} 条唛头并新建一条空白唛头；最近打印尺寸会保留。此操作无法撤销。`,
                 confirmLabel: '清空草稿',
                 action: () => {
+                  clearLineSelection();
+                  setActiveLineId(null);
                   dispatch({ type: 'clear-draft' });
                   setStatus('草稿已清空');
                 },
@@ -407,7 +446,7 @@ export default function App({ initialState }: AppProps) {
       plan={printPlan}
       onClose={closePrintDialog}
       onEditLabel={(id) => {
-        dispatch({ type: 'set-active-label', id });
+        activateLabel(id);
         closePrintDialog();
       }}
       onPrintGroup={(group) => {

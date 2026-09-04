@@ -8,7 +8,7 @@ import {
   type PointerDragStart,
   type TextResizeHandle,
 } from '../domain/pointerDrag';
-import { contentWithUpdatedTextLine, updateTextLine } from '../domain/textLines';
+import { contentWithUpdatedTextLine, moveSelectedTextLines, updateTextLine } from '../domain/textLines';
 import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset, TextPlacement } from '../domain/labels';
 import { StyledTextLine } from './StyledText';
 
@@ -16,7 +16,9 @@ interface LabelPreviewProps {
   label: LabelRecord;
   preset: SizePreset;
   activeLineId: string | null;
-  onActiveLineChange: (id: string) => void;
+  selectedLineIds: string[];
+  onSelectLine: (id: string) => void;
+  onClearLineSelection: () => void;
   onChange: (patch: Partial<LabelRecord>) => void;
 }
 
@@ -57,7 +59,7 @@ const resizeHandles: Array<{ id: PrintAreaResizeHandle; label: string }> = [
 
 const textResizeHandles: TextResizeHandle[] = ['nw', 'ne', 'se', 'sw'];
 
-export default function LabelPreview({ label, preset, activeLineId, onActiveLineChange, onChange }: LabelPreviewProps) {
+export default function LabelPreview({ label, preset, activeLineId, selectedLineIds, onSelectLine, onClearLineSelection, onChange }: LabelPreviewProps) {
   const paperRef = useRef<HTMLDivElement>(null);
   const contentLayerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<(PointerDragStart & { lineId: string }) | null>(null);
@@ -156,7 +158,13 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     const placement = resolvePointerDragUpdate(start, event, bounds);
     if (!placement) return;
     setDraggingId(line.id);
-    patchLine(line, { placement });
+    const ids = selectedLineIds.includes(line.id) ? selectedLineIds : [line.id];
+    onChange({ textLines: moveSelectedTextLines(
+      label.textLines,
+      ids,
+      placement.xPercent - start.placement.xPercent,
+      placement.yPercent - start.placement.yPercent,
+    ) });
   };
   const handleKeyDown = (line: LabelTextLine, event: KeyboardEvent<HTMLButtonElement>) => {
     const amount = event.shiftKey ? 5 : 1;
@@ -166,12 +174,8 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     const delta = movement[event.key];
     if (!delta) return;
     event.preventDefault();
-    patchLine(line, { placement: {
-      xPercent: Math.max(0, Math.min(100, line.placement.xPercent + delta[0])),
-      yPercent: Math.max(0, Math.min(100, line.placement.yPercent + delta[1])),
-      horizontalSnap: delta[0] ? 'free' : line.placement.horizontalSnap,
-      verticalSnap: delta[1] ? 'free' : line.placement.verticalSnap,
-    } });
+    const ids = selectedLineIds.includes(line.id) ? selectedLineIds : [line.id];
+    onChange({ textLines: moveSelectedTextLines(label.textLines, ids, delta[0], delta[1]) });
   };
   const resizeTextFromPointer = (line: LabelTextLine, event: PointerEvent<HTMLSpanElement>) => {
     const start = textResizeRef.current;
@@ -200,7 +204,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     patchLine(line, { style: { ...line.style, fontSizePt: Math.max(8, Math.min(120, current + direction * amount)) } });
   };
   const startEditing = (line: LabelTextLine) => {
-    onActiveLineChange(line.id);
+    onSelectLine(line.id);
     editStartRef.current = { lineId: line.id, text: line.text };
     setEditingLineId(line.id);
   };
@@ -248,11 +252,16 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
           event.currentTarget.setPointerCapture(event.pointerId);
           printAreaDragRef.current = { clientX: event.clientX, clientY: event.clientY, area: printArea, mode: 'move' };
         }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClearLineSelection();
+        }}
         onPointerMove={updatePrintAreaFromPointer}
         onPointerUp={finishPrintAreaDrag}
         onPointerCancel={() => { printAreaDragRef.current = null; setIsAreaDragging(false); }}
       >
-        <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }}>
+        <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }} onClick={(event) => {
+          if (event.target === event.currentTarget) onClearLineSelection();
+        }}>
         {draggingId && <><i className="snap-guide guide-x" /><i className="snap-guide guide-y" /></>}
         {label.contentType === 'image' && label.imageFallback ? <img src={label.imageFallback} alt="待打印唛头" /> : showDirectEntry ? (
           <textarea
@@ -269,6 +278,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
           />
         ) :
           label.textLines.map((line, index) => {
+            const isSelected = selectedLineIds.includes(line.id);
             const isActive = line.id === activeLine?.id;
             const frameStyle: CSSProperties = {
               left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
@@ -300,17 +310,17 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
                   onClick={(event) => event.stopPropagation()}
                 /></div>;
             }
-            return <div key={line.id} className={`text-line-frame ${isActive ? 'is-active-line' : ''}`} style={frameStyle}>
+            return <div key={line.id} className={`text-line-frame ${isActive ? 'is-active-line' : ''} ${isSelected ? 'is-selected-line' : ''}`} style={frameStyle}>
               <button type="button"
                 className={`draggable-text draggable-line ${draggingId === line.id ? 'is-dragging' : ''}`}
-                style={textStyle} aria-pressed={isActive}
+                style={textStyle} aria-pressed={isSelected}
                 aria-label={`拖动第 ${index + 1} 行：${line.text || '空行'}，当前位置：${describePlacement(line.placement)}。方向键微调，Shift 加速。`}
-                onClick={() => onActiveLineChange(line.id)}
+                onClick={(event) => { event.stopPropagation(); onSelectLine(line.id); }}
                 onDoubleClick={() => startEditing(line)}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   event.currentTarget.setPointerCapture(event.pointerId);
-                  onActiveLineChange(line.id);
+                  onSelectLine(line.id);
                   dragStartRef.current = {
                     lineId: line.id,
                     clientX: event.clientX,
