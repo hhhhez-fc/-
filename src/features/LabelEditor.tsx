@@ -1,6 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import type { InlineTextStyle, LabelRecord } from '../domain/labels';
-import { MAX_LABEL_QUANTITY } from '../domain/quantity';
 import { buildImmediateTextStylePatch } from '../domain/richText';
 import { updateTextLine } from '../domain/textLines';
 
@@ -67,7 +66,6 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
         <h3>当前唛头</h3>
         <span>{label.purpose === 'envelope' ? '信封' : '外箱'}</span>
       </div>
-      {label.reviewReason && <p className="review-reason">{label.reviewReason}</p>}
       {reviewErrors.length > 0 && <p className="review-errors">打印前请处理：{reviewErrors.join('；')}</p>}
       <label className="field">
         <span>唛头内容</span>
@@ -120,18 +118,6 @@ export default function LabelEditor({ label, activeLineId, onActiveLineChange, o
         {label.textStyleRanges.length > 0 && <small>已应用 {label.textStyleRanges.length} 段局部样式；修改正文后会自动清除。</small>}
       </fieldset>
       <div className="field-grid two-columns">
-        <label className="field">
-          <span>基础数量</span>
-          <input
-            type="number"
-            min="1"
-            max={MAX_LABEL_QUANTITY}
-            step="1"
-            inputMode="numeric"
-            value={label.quantity}
-            onChange={(event) => onChange({ quantity: Number(event.target.value) })}
-          />
-        </label>
         <label className="field">
           <span>张贴面数</span>
           <input

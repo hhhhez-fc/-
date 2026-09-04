@@ -14,7 +14,7 @@ import {
 const PANEL_TITLES: Record<WorkspacePanelId, string> = {
   intake: '录入来源',
   preview: '尺寸与预览',
-  records: '校对清单',
+  records: '唛头清单',
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));

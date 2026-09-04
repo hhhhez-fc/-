@@ -59,7 +59,7 @@ export default function App({ initialState }: AppProps) {
     : activeLabel;
   const printPlan = useMemo(() => createPrintPlan(state.labels, state.sizePresets), [state.labels, state.sizePresets]);
   const activeReviewErrors = activeLabel && activePreset
-    ? [...validateSizePreset(activePreset), ...validateLabelForPrint({ ...activeLabel, needsReview: false }, activePreset)]
+    ? [...validateSizePreset(activePreset), ...validateLabelForPrint(activeLabel, activePreset)]
     : [];
   const resolvedActiveLineId = activeLabel?.textLines.some((line) => line.id === activeLineId)
     ? activeLineId
@@ -118,8 +118,7 @@ export default function App({ initialState }: AppProps) {
       contentType: 'text',
       sizeType,
       sizePresetId: defaultNewLabelPreset.id,
-      needsReview: true,
-      reviewReason: '请填写唛头内容并完成校对',
+      needsReview: false,
     });
     dispatch({ type: 'add-label', label });
     setStatus('已新增一条手动唛头');
@@ -136,7 +135,6 @@ export default function App({ initialState }: AppProps) {
   const allSelected = state.labels.length > 0 && selectedCount === state.labels.length;
   const openActivePrintPreview = () => {
     if (!activeLabel || activeReviewErrors.length > 0) return;
-    if (activeLabel.needsReview) dispatch({ type: 'mark-reviewed', id: activeLabel.id });
     setPrintDialogOpen(true);
   };
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
@@ -217,11 +215,11 @@ export default function App({ initialState }: AppProps) {
       </section>
     </>,
     records: <>
-      <div className="panel-heading panel-drag-handle records-heading" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动校对清单板块；左右方向键换位">
+      <div className="panel-heading panel-drag-handle records-heading" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动唛头清单板块；左右方向键换位">
         <span className="step-number">02</span>
         <div>
-          <h2 id="records-title">校对清单</h2>
-          <p>{state.labels.length} 条记录 · {state.labels.filter((label) => label.needsReview).length} 条待校对</p>
+          <h2 id="records-title">唛头清单</h2>
+          <p>{state.labels.length} 条记录</p>
         </div>
       </div>
       <LabelList
@@ -230,6 +228,7 @@ export default function App({ initialState }: AppProps) {
         selectedLabelIds={state.selectedLabelIds}
         onActivate={(id) => dispatch({ type: 'set-active-label', id })}
         onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
+        onQuantityChange={(id, quantity) => dispatch({ type: 'update-label', id, patch: { quantity } })}
         onDuplicate={(id) => dispatch({ type: 'duplicate-label', id })}
         onDelete={deleteLabel}
       />

@@ -38,13 +38,14 @@ describe('草稿状态', () => {
     expect(next.labels.map((label) => label.content)).toEqual(['A-UPDATED', 'B']);
   });
 
-  it('已校对记录修改内容或数量后会重新进入待校对状态', () => {
+  it('修改正文和数量不再写入待校对原因', () => {
     const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false });
     const state = { ...createInitialDraft(), labels: [label] };
 
     const next = draftReducer(state, { type: 'update-label', id: label.id, patch: { quantity: 3 } });
 
-    expect(next.labels[0]).toMatchObject({ quantity: 3, needsReview: true, reviewReason: '内容或数量已修改，请重新校对' });
+    expect(next.labels[0]).toMatchObject({ quantity: 3, needsReview: false });
+    expect(next.labels[0].reviewReason).toBeUndefined();
   });
 
   it('业务与用途选择作为后续新增记录的默认上下文保存', () => {
@@ -220,7 +221,7 @@ describe('草稿状态', () => {
     const next = draftReducer(state, { type: 'duplicate-label', id: label.id });
 
     expect(next.labels).toHaveLength(2);
-    expect(next.labels[1]).toMatchObject({ content: 'A', quantity: 2, needsReview: true });
+    expect(next.labels[1]).toMatchObject({ content: 'A', quantity: 2, needsReview: false });
     expect(next.labels[1].id).not.toBe(label.id);
     expect(next.activeLabelId).toBe(next.labels[1].id);
   });
@@ -243,24 +244,6 @@ describe('草稿状态', () => {
     expect(draftReducer(inUse, { type: 'remove-size-preset', id: 'large' })).toBe(inUse);
   });
 
-  it('校对确认会清除待校对原因', () => {
-    const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: true, reviewReason: '待确认' });
-    const state = { ...createInitialDraft(), labels: [label] };
-
-    const next = draftReducer(state, { type: 'mark-reviewed', id: label.id });
-
-    expect(next.labels[0]).toMatchObject({ needsReview: false });
-    expect(next.labels[0].reviewReason).toBeUndefined();
-  });
-
-  it('内容或数量无效时不能确认校对完成', () => {
-    const label = createLabel({ content: '', quantity: 0, source: 'manual', needsReview: true });
-    const state = { ...createInitialDraft(), labels: [label] };
-
-    const next = draftReducer(state, { type: 'mark-reviewed', id: label.id });
-
-    expect(next).toBe(state);
-  });
 });
 
 describe('本地草稿存储', () => {

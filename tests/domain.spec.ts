@@ -37,6 +37,12 @@ describe('业务默认规格', () => {
 });
 
 describe('打印数量校验', () => {
+  it('人工校对状态不阻止合法唛头打印', () => {
+    const label = createLabel({ content: 'FY-01', quantity: 1, source: 'manual', needsReview: true });
+
+    expect(validateLabelForPrint(label, defaultSizePresets[0])).not.toContain('该唛头尚未完成校对');
+  });
+
   it.each(['0', '-3', '1.5', 'abc', ''])('将非法数量 %j 标记为需要校对', (input) => {
     expect(parseQuantity(input)).toEqual({ quantity: 1, needsReview: true });
   });
@@ -177,7 +183,7 @@ describe('唛头排版', () => {
     expect(result).toEqual({ ok: false, error: '固定字号下内容超出唛头范围' });
   });
 
-  it('打印前同时报告待校对、数量和内容问题', () => {
+  it('打印前报告数量和内容问题，但不报告人工校对状态', () => {
     const label = createLabel({
       content: '   ',
       contentType: 'text',
@@ -193,7 +199,6 @@ describe('唛头排版', () => {
     expect(validateLabelForPrint(label, defaultSizePresets[1])).toEqual([
       '唛头内容不能为空',
       '打印数量必须是正整数',
-      '该唛头尚未完成校对',
     ]);
   });
 });

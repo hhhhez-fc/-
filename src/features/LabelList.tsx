@@ -1,16 +1,19 @@
 import type { LabelRecord } from '../domain/labels';
+import { MAX_LABEL_QUANTITY } from '../domain/quantity';
+import QuantityStepper from './QuantityStepper';
 
-interface LabelListProps {
+export interface LabelListProps {
   labels: LabelRecord[];
   activeLabelId: string | null;
   selectedLabelIds: string[];
   onActivate: (id: string) => void;
   onToggleSelect: (id: string) => void;
+  onQuantityChange: (id: string, quantity: number) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export default function LabelList({ labels, activeLabelId, selectedLabelIds, onActivate, onToggleSelect, onDuplicate, onDelete }: LabelListProps) {
+export default function LabelList({ labels, activeLabelId, selectedLabelIds, onActivate, onToggleSelect, onQuantityChange, onDuplicate, onDelete }: LabelListProps) {
   if (labels.length === 0) {
     return (
       <div className="records-empty">
@@ -43,10 +46,13 @@ export default function LabelList({ labels, activeLabelId, selectedLabelIds, onA
               <strong>{label.content.trim() || '未填写内容'}</strong>
               <small>{label.quantity} 件 × {label.sides} 面 · {label.source === 'manual' ? '手动' : label.source}</small>
             </span>
-            <span className={`review-badge ${label.needsReview ? 'is-warning' : 'is-ready'}`}>
-              {label.needsReview ? '待校对' : '可打印'}
-            </span>
           </button>
+          <QuantityStepper
+            value={label.quantity}
+            max={MAX_LABEL_QUANTITY}
+            label={`第 ${index + 1} 条唛头的打印数量`}
+            onCommit={(quantity) => onQuantityChange(label.id, quantity)}
+          />
           <div className="row-actions" aria-label={`第 ${index + 1} 条唛头操作`}>
             <button type="button" onClick={() => onDuplicate(label.id)}>复制</button>
             <button type="button" onClick={() => onDelete(label.id)}>删除</button>

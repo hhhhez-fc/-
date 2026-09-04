@@ -27,7 +27,6 @@ describe('print planning', () => {
     expect(plan.blockers[0].reasons).toEqual([
       '唛头内容不能为空',
       '打印数量必须是正整数',
-      '该唛头尚未完成校对',
     ]);
   });
 

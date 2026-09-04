@@ -23,6 +23,10 @@ describe('唛头打印工作台', () => {
     expect(html).toContain('未填写内容');
     expect(html).toContain('aria-label="直接输入唛头内容"');
     expect(html).toContain('placeholder="在此输入唛头内容"');
+    expect(html).toContain('唛头清单');
+    expect(html).not.toContain('待校对');
+    expect(html).not.toContain('<span>基础数量</span>');
+    expect(html).toContain('张贴面数');
   });
 
   it('将三个工作区板块暴露为可拖动、边缘可调整大小的区域，并把历史并入来源', () => {

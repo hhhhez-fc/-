@@ -168,8 +168,6 @@ export function validateLabelForPrint(label: LabelRecord, preset: SizePreset): s
   if (!Number.isSafeInteger(label.quantity) || label.quantity < 1) errors.push('打印数量必须是正整数');
   else if (label.quantity > MAX_LABEL_QUANTITY) errors.push(`基础数量不能超过 ${MAX_LABEL_QUANTITY}`);
   if (!Number.isSafeInteger(label.sides) || label.sides < 1) errors.push('张贴面数必须是正整数');
-  if (label.needsReview) errors.push('该唛头尚未完成校对');
-
   if (label.contentType === 'text' && label.content.trim()) {
     const layout = solveLabelTextLayout(label, preset);
     if (!layout.ok) errors.push(layout.error);
