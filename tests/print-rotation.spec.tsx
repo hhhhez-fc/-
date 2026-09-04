@@ -6,6 +6,7 @@ import { createLabel, defaultSizePresets, type TextPlacement } from '../src/doma
 import { nextPrintRotation, rotationTransform } from '../src/domain/printRotation';
 import { createPrintPlan } from '../src/domain/printing';
 import PrintPages from '../src/features/PrintPages';
+import PrintLabelThumbnail from '../src/features/PrintLabelThumbnail';
 import PrintReviewDialog from '../src/features/PrintReviewDialog';
 
 const centerPlacement: TextPlacement = {
@@ -69,8 +70,8 @@ describe('打印文字旋转', () => {
 
     expect(html.match(/class="print-label-thumbnail"/g)).toHaveLength(3);
     expect(html.match(/>旋转 90°<\/button>/g)).toHaveLength(2);
-    expect(html).toContain(`aria-label="旋转第 1 个文字唛头 A 90°"`);
-    expect(html).toContain(`aria-label="旋转第 2 个文字唛头 B 90°"`);
+    expect(html).toContain(`aria-label="旋转 70 × 45 mm 第 1 个文字唛头 A 90°"`);
+    expect(html).toContain(`aria-label="旋转 70 × 45 mm 第 2 个文字唛头 B 90°"`);
     expect(html).toContain('当前 90°');
     expect(html).not.toContain('旋转第 3 个文字唛头');
   });
@@ -100,5 +101,40 @@ describe('打印文字旋转', () => {
 
     expect(html).toContain('内容在最小字号下仍无法完整显示');
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>打印这一组<\/button>/);
+    expect(html).toContain('旋转后内容需要调整');
+    expect(html).not.toContain('可以打印');
+  });
+
+  it('不同尺寸组使用重复摘要时仍提供全局唯一的旋转名称', () => {
+    const small = textLabel('SAME');
+    const large = createLabel({
+      content: 'SAME', quantity: 1, source: 'manual', sizePresetId: 'large', needsReview: false,
+    });
+    const plan = createPrintPlan([small, large], defaultSizePresets);
+    const html = renderToStaticMarkup(<PrintReviewDialog
+      open
+      plan={plan}
+      rotations={{}}
+      onRotateLabel={() => undefined}
+      onClose={() => undefined}
+      onEditLabel={() => undefined}
+      onPrintGroup={() => undefined}
+    />);
+
+    expect(html).toContain('aria-label="旋转 70 × 45 mm 第 1 个文字唛头 SAME 90°"');
+    expect(html).toContain('aria-label="旋转 100 × 60 mm 第 1 个文字唛头 SAME 90°"');
+  });
+
+  it('缩略纸张在窄屏堆叠后仍固定使用与字体计算一致的 150px 宽度', () => {
+    const label = textLabel('A');
+    const html = renderToStaticMarkup(<PrintLabelThumbnail
+      label={label}
+      preset={defaultSizePresets[1]}
+      rotation={0}
+    />);
+
+    expect(html).toContain('class="print-label-thumbnail"');
+    expect(html).toContain('width:150px');
+    expect(html).toContain('aspect-ratio:70 / 45');
   });
 });

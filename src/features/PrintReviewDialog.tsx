@@ -14,6 +14,18 @@ interface PrintReviewDialogProps {
   onPrintGroup: (group: PrintGroup) => void;
 }
 
+function getUniquePages(group: PrintGroup) {
+  return Array.from(new Map(group.pages.map((page) => [page.label.id, page])).values());
+}
+
+function getRotationErrors(group: PrintGroup, rotations: Record<string, PrintRotation>) {
+  return getUniquePages(group).flatMap(({ label, preset }) => {
+    if (label.contentType !== 'text') return [];
+    const layout = solveLabelTextLayout(label, preset, rotations[label.id] ?? 0);
+    return layout.ok ? [] : [{ labelId: label.id, error: layout.error }];
+  });
+}
+
 export async function copyPaperSizeToClipboard(
   sizeLabel: string,
   writer?: { writeText: (text: string) => Promise<void> },
@@ -83,13 +95,27 @@ export default function PrintReviewDialog({
 
   if (!open) return null;
   const blocked = plan.blockers.length > 0;
+  const groupPreviews = plan.groups.map((group) => ({
+    group,
+    uniquePages: getUniquePages(group),
+    rotationErrors: getRotationErrors(group, rotations),
+  }));
+  const hasRotationBlockers = groupPreviews.some(({ rotationErrors }) => rotationErrors.length > 0);
+  const printableCopies = groupPreviews.reduce((total, { group, rotationErrors }) => (
+    rotationErrors.length > 0 ? total : total + group.pages.length
+  ), 0);
+  const title = blocked
+    ? '还有内容需要处理'
+    : hasRotationBlockers
+      ? printableCopies === 0 ? '旋转后内容需要调整' : `仍有 ${printableCopies} 张可以打印`
+      : `共 ${plan.totalCopies} 张，可以打印`;
   return (
     <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="print-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="print-dialog-title">
         <div className="print-dialog-header">
           <div>
             <span className="dialog-kicker">PRINT CHECK · 打印检查</span>
-            <h2 id="print-dialog-title">{blocked ? '还有内容需要处理' : `共 ${plan.totalCopies} 张，可以打印`}</h2>
+            <h2 id="print-dialog-title">{title}</h2>
           </div>
           <button ref={closeRef} className="button button-quiet" type="button" onClick={onClose}>关闭</button>
         </div>
@@ -111,7 +137,9 @@ export default function PrintReviewDialog({
           </div>
         ) : (
           <div className="print-groups">
-            <p>不同实际尺寸会分开打印。请按下方顺序，在打印机中换好对应规格的纸张。</p>
+            <p>{hasRotationBlockers
+              ? '旋转后超出范围的尺寸组暂不能打印，请调整角度后再继续。'
+              : '不同实际尺寸会分开打印。请按下方顺序，在打印机中换好对应规格的纸张。'}</p>
             <aside className="print-copy-rule" aria-label="打印份数规则">
               <strong>系统打印份数保持 1</strong>
               <span>程序已经按录入数量生成打印页，请勿在系统窗口重复增加份数。</span>
@@ -126,15 +154,7 @@ export default function PrintReviewDialog({
               </ol>
             </aside>
             <p className="print-copy-feedback" role="status" aria-live="polite">{copyStatus}</p>
-            {plan.groups.map((group, index) => {
-              const uniquePages = Array.from(
-                new Map(group.pages.map((page) => [page.label.id, page])).values(),
-              );
-              const rotationErrors = uniquePages.flatMap(({ label, preset }) => {
-                if (label.contentType !== 'text') return [];
-                const layout = solveLabelTextLayout(label, preset, rotations[label.id] ?? 0);
-                return layout.ok ? [] : [{ labelId: label.id, error: layout.error }];
-              });
+            {groupPreviews.map(({ group, uniquePages, rotationErrors }, index) => {
               const rotationErrorById = new Map(rotationErrors.map((item) => [item.labelId, item.error]));
               return (
                 <article key={group.key}>
@@ -176,7 +196,7 @@ export default function PrintReviewDialog({
                                 <button
                                   className="button button-quiet button-compact"
                                   type="button"
-                                  aria-label={`旋转第 ${labelIndex + 1} 个文字唛头 ${summary} 90°`}
+                                  aria-label={`旋转 ${group.sizeLabel} 第 ${labelIndex + 1} 个文字唛头 ${summary} 90°`}
                                   onClick={() => onRotateLabel(label.id)}
                                 >旋转 90°</button>
                                 <span>当前 {rotation}°</span>

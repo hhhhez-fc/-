@@ -309,7 +309,7 @@ describe('打印检查', () => {
     render(<App initialState={state} />);
 
     await user.click(screen.getByRole('button', { name: '打印预览' }));
-    const rotate = screen.getByRole('button', { name: '旋转第 1 个文字唛头 ROTATE-ME 90°' });
+    const rotate = screen.getByRole('button', { name: '旋转 70 × 45 mm 第 1 个文字唛头 ROTATE-ME 90°' });
     expect(screen.getByText('当前 0°')).toBeTruthy();
     await user.click(rotate);
     expect(screen.getByText('当前 90°')).toBeTruthy();

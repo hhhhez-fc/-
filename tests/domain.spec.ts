@@ -226,6 +226,40 @@ describe('唛头排版', () => {
       .toEqual(clockwise.ok && clockwise.lineLayouts[label.textLines[0].id]);
   });
 
+  it.each([90, 270] as const)('按实际 CSS 中心旋转包围盒阻止 %i° 的四边吸附溢出', (rotation) => {
+    const edgeCases = [
+      {
+        orientation: 'vertical' as const,
+        placement: { xPercent: 0, yPercent: 50, horizontalSnap: 'left' as const, verticalSnap: 'middle' as const },
+      },
+      {
+        orientation: 'vertical' as const,
+        placement: { xPercent: 100, yPercent: 50, horizontalSnap: 'right' as const, verticalSnap: 'middle' as const },
+      },
+      {
+        orientation: 'horizontal' as const,
+        placement: { xPercent: 50, yPercent: 0, horizontalSnap: 'center' as const, verticalSnap: 'top' as const },
+      },
+      {
+        orientation: 'horizontal' as const,
+        placement: { xPercent: 50, yPercent: 100, horizontalSnap: 'center' as const, verticalSnap: 'bottom' as const },
+      },
+    ];
+
+    const results = edgeCases.map(({ orientation, placement }) => {
+      const label = createLabel({ content: 'MMMM', quantity: 1, source: 'manual', needsReview: false });
+      label.textLines[0].textOrientation = orientation;
+      label.textLines[0].placement = placement;
+      return solveLabelTextLayout(label, defaultSizePresets[0], rotation);
+    });
+
+    const overflow = expect.objectContaining({
+      ok: false,
+      error: '内容在最小字号下仍无法完整显示',
+    });
+    expect(results).toEqual([overflow, overflow, overflow, overflow]);
+  });
+
   it('最小字号仍无法容纳时保持打印阻断', () => {
     const label = createLabel({
       content: 'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM',

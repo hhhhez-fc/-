@@ -19,6 +19,7 @@ export default function PrintLabelThumbnail({ label, preset, rotation }: PrintLa
   const printArea = resolvePrintArea(label.printArea, preset);
   const previewScale = THUMBNAIL_WIDTH_PX / (preset.widthMm * MM_TO_PX);
   const paperStyle: CSSProperties = {
+    width: `${THUMBNAIL_WIDTH_PX}px`,
     aspectRatio: `${preset.widthMm} / ${preset.heightMm}`,
     fontFamily: label.style.fontFamily,
     fontWeight: label.style.fontWeight,

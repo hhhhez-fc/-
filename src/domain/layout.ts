@@ -132,18 +132,28 @@ function scaledLineRect(
 ) {
   const line = label.textLines[lineIndex];
   const measured = scaledLineDimensions(label, lineIndex, baseFontSizePt, fontScale);
-  const dimensions = rotationSwapsAxes(rotation)
+  const rotatedDimensions = rotationSwapsAxes(rotation)
     ? { width: measured.height, height: measured.width }
     : measured;
   const anchorX = width * (Math.max(0, Math.min(100, line.placement.xPercent)) / 100);
   const anchorY = height * (Math.max(0, Math.min(100, line.placement.yPercent)) / 100);
-  const left = line.placement.horizontalSnap === 'left'
-    ? anchorX
-    : line.placement.horizontalSnap === 'right' ? anchorX - dimensions.width : anchorX - dimensions.width / 2;
-  const top = line.placement.verticalSnap === 'top'
-    ? anchorY
-    : line.placement.verticalSnap === 'bottom' ? anchorY - dimensions.height : anchorY - dimensions.height / 2;
-  return { left, top, right: left + dimensions.width, bottom: top + dimensions.height };
+  const translateX = line.placement.horizontalSnap === 'left'
+    ? 0
+    : line.placement.horizontalSnap === 'right' ? -measured.width : -measured.width / 2;
+  const translateY = line.placement.verticalSnap === 'top'
+    ? 0
+    : line.placement.verticalSnap === 'bottom' ? -measured.height : -measured.height / 2;
+  // CSS keeps the original snap translation, then rotates the box around its default center origin.
+  const rotatedCenterX = anchorX + measured.width / 2 + translateX;
+  const rotatedCenterY = anchorY + measured.height / 2 + translateY;
+  const left = rotatedCenterX - rotatedDimensions.width / 2;
+  const top = rotatedCenterY - rotatedDimensions.height / 2;
+  return {
+    left,
+    top,
+    right: left + rotatedDimensions.width,
+    bottom: top + rotatedDimensions.height,
+  };
 }
 
 function scaledRectFitsBounds(rect: ReturnType<typeof scaledLineRect>, width: number, height: number): boolean {

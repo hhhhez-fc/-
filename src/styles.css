@@ -551,7 +551,6 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
   .print-groups article { grid-template-columns: 2rem minmax(0,1fr); }
   .print-group-actions { grid-column: 1/-1; align-items: stretch; flex-direction: column; }
   .print-label-preview-row { grid-template-columns: minmax(0,1fr); }
-  .print-label-thumbnail { width: min(100%,12rem); }
 }
 @media (prefers-reduced-motion: reduce) {
   /* Accessibility override must win over every component transition. */
