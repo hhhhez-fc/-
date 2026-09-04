@@ -4,7 +4,7 @@ import {
   identifyExcelColumns,
   normalizeCellRange,
   parseWorkbook,
-  regionsToLabels,
+  regionsToLabel,
   rowsToLabelsWithColumns,
   type CellRange,
   type ParsedWorkbook,
@@ -109,13 +109,13 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
 
   const confirmRegionImport = () => {
     if (!activeSheet || regions.length === 0) return;
-    const labels = regionsToLabels(activeSheet, regions, sizePresetId, purpose);
-    if (labels.length === 0) {
-      setError('框选区域内没有可提取的文字');
+    const label = regionsToLabel(activeSheet, regions, sizePresetId, purpose);
+    if (!label) {
+      setError('框选区域没有可导入内容');
       return;
     }
-    onImport(labels);
-    onStatus(`已从 ${activeSheet.name} 提取 ${labels.length} 条唛头`);
+    onImport([label]);
+    onStatus(`已从 ${activeSheet.name} 提取 1 条唛头`);
     setWorkbook(null);
     setRegions([]);
   };

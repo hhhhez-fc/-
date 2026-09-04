@@ -81,13 +81,18 @@ export function extractRegionText(sheet: ParsedSheet, range: CellRange): string 
   return values.join('\n');
 }
 
-export function regionsToLabels(
+export function regionsToLabel(
   sheet: ParsedSheet,
   ranges: CellRange[],
   sizePresetId: string,
   purpose: LabelPurpose = 'carton',
-): LabelRecord[] {
-  return ranges.map((range) => extractRegionText(sheet, range)).filter(Boolean).map((content) => createLabel({
+): LabelRecord | null {
+  const content = ranges
+    .map((range) => extractRegionText(sheet, range))
+    .filter(Boolean)
+    .join('\n');
+  if (!content) return null;
+  return createLabel({
     content,
     contentType: 'text',
     purpose,
@@ -95,9 +100,8 @@ export function regionsToLabels(
     quantity: 1,
     sides: 1,
     source: 'excel',
-    needsReview: true,
-    reviewReason: 'Excel 框选内容需要人工校对',
-  }));
+    needsReview: false,
+  });
 }
 
 export function parseWorkbook(data: ArrayBuffer | Uint8Array): ParsedWorkbook {
