@@ -310,7 +310,7 @@ describe('打印检查', () => {
     const group = createPrintPlan([label], defaultSizePresets).groups[0];
     const html = renderToStaticMarkup(<PrintPages group={group} />);
 
-    expect(html.match(/<section class="print-page"/g)).toHaveLength(4);
+    expect(html.match(/<section class="print-page[^"]*"/g)).toHaveLength(4);
     expect(html).toMatch(/\.app-shell[^}]*display:\s*none\s*!important/);
     expect(html).toMatch(/\.dialog-backdrop[^}]*display:\s*none\s*!important/);
     expect(html).toMatch(/\.print-root[^}]*position:\s*static\s*!important/);

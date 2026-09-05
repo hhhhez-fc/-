@@ -3,7 +3,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createLabel, defaultSizePresets } from '../src/domain/labels';
-import { getPrintRotationScale, nextPrintRotation } from '../src/domain/printRotation';
+import { nextPrintRotation } from '../src/domain/printRotation';
 import { createPrintPlan } from '../src/domain/printing';
 import PrintPages from '../src/features/PrintPages';
 import PrintLabelThumbnail from '../src/features/PrintLabelThumbnail';
@@ -24,13 +24,6 @@ describe('打印文字旋转', () => {
       nextPrintRotation(180),
       nextPrintRotation(270),
     ]).toEqual([90, 180, 270, 0]);
-  });
-
-  it('90 或 270 度统一缩小整个内容层以适配原打印区域', () => {
-    expect(getPrintRotationScale(62, 37, 0)).toBe(1);
-    expect(getPrintRotationScale(62, 37, 90)).toBeCloseTo(37 / 62);
-    expect(getPrintRotationScale(62, 37, 180)).toBe(1);
-    expect(getPrintRotationScale(62, 37, 270)).toBeCloseTo(37 / 62);
   });
 
   it('为每个不同文字唛头显示一个缩略图和唯一旋转控制，图片不显示旋转按钮', () => {
@@ -63,7 +56,7 @@ describe('打印文字旋转', () => {
     expect(html).not.toContain('旋转第 3 个文字唛头');
   });
 
-  it('实际打印只旋转一次整个文字层并保持纸张尺寸和逐行坐标不变', () => {
+  it('实际打印让纸张和文字一起旋转，字号保持不变', () => {
     const created = textLabel('1546\n4548');
     const label = {
       ...created,
@@ -72,17 +65,22 @@ describe('打印文字旋转', () => {
     const group = createPrintPlan([label], defaultSizePresets).groups[0];
     const html = renderToStaticMarkup(<PrintPages group={group} rotations={{ [label.id]: 90 }} />);
 
-    expect(html).toContain(`@page { size: ${group.widthMm}mm ${group.heightMm}mm; margin: 0; }`);
+    expect(html).toContain(`@page print-page-normal { size: ${group.widthMm}mm ${group.heightMm}mm; margin: 0; }`);
+    expect(html).toContain(`@page print-page-rotated { size: ${group.heightMm}mm ${group.widthMm}mm; margin: 0; }`);
+    expect(html).toContain(`width:${group.heightMm}mm`);
+    expect(html).toContain(`height:${group.widthMm}mm`);
     expect(html.match(/rotate\(90deg\)/g)).toHaveLength(1);
-    expect(html).toContain('transform:rotate(90deg) scale(0.596774)');
+    expect(html).toContain('transform:translate(-50%, -50%) rotate(90deg)');
+    expect(html).not.toContain('scale(');
+    expect(html.match(/font-size:12pt/g)).toHaveLength(2);
     expect(html).toContain(`left:${label.textLines[0].placement.xPercent}%`);
     expect(html).toContain(`top:${label.textLines[0].placement.yPercent}%`);
     expect(html).toContain(`left:${label.textLines[1].placement.xPercent}%`);
     expect(html).toContain(`top:${label.textLines[1].placement.yPercent}%`);
-    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(2);
+    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(3);
   });
 
-  it('旋转后统一缩小整个内容层并保持该组可打印', () => {
+  it('旋转后不缩小文字并保持该组可打印', () => {
     const label = textLabel('MMMMMMMMMMMMMMM');
     const plan = createPrintPlan([label], defaultSizePresets);
     expect(plan.blockers).toEqual([]);
@@ -96,7 +94,9 @@ describe('打印文字旋转', () => {
       onPrintGroup={() => undefined}
     />);
 
-    expect(html).toContain('transform:rotate(90deg) scale(0.596774)');
+    expect(html).toContain('transform:translate(-50%, -50%) rotate(90deg)');
+    expect(html).not.toContain('scale(');
+    expect(html).toContain('输出纸张 45 × 70 mm');
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>打印这一组<\/button>/);
     expect(html).toContain('共 1 张，可以打印');
   });
@@ -134,7 +134,7 @@ describe('打印文字旋转', () => {
     expect(html).toContain('aspect-ratio:70 / 45');
   });
 
-  it('缩略图和实际打印一样只旋转一次整个文字层', () => {
+  it('缩略图和实际打印一样旋转整张纸且不缩放文字', () => {
     const created = textLabel('1546\n4548');
     const label = {
       ...created,
@@ -147,6 +147,8 @@ describe('打印文字旋转', () => {
     />);
 
     expect(html.match(/rotate\(90deg\)/g)).toHaveLength(1);
-    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(2);
+    expect(html).toContain('aspect-ratio:45 / 70');
+    expect(html).not.toContain('scale(');
+    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(3);
   });
 });
