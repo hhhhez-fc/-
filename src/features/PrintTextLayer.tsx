@@ -1,13 +1,14 @@
 import type { CSSProperties } from 'react';
 import { solveLabelTextLayout } from '../domain/layout';
 import type { LabelRecord, SizePreset } from '../domain/labels';
-import { placementTransform } from '../domain/printRotation';
+import { textRotationTransform, type PrintRotation } from '../domain/printRotation';
 import { StyledTextLine } from './StyledText';
 
 interface PrintTextLayerProps {
   label: LabelRecord;
   preset: SizePreset;
   lineClassName: string;
+  rotation: PrintRotation;
   previewScale?: number;
 }
 
@@ -15,6 +16,7 @@ export default function PrintTextLayer({
   label,
   preset,
   lineClassName,
+  rotation,
   previewScale,
 }: PrintTextLayerProps) {
   const layout = solveLabelTextLayout(label, preset);
@@ -30,7 +32,7 @@ export default function PrintTextLayer({
       return <span className={lineClassName} key={line.id} style={{
         left: `${line.placement.xPercent}%`,
         top: `${line.placement.yPercent}%`,
-        transform: placementTransform(line.placement),
+        transform: textRotationTransform(line.placement, rotation),
         textAlign: label.style.horizontalAlign,
         whiteSpace: 'nowrap',
         writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',

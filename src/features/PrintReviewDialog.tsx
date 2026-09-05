@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PrintGroup, PrintPlan } from '../domain/printing';
-import { rotationSwapsAxes, type PrintRotation } from '../domain/printRotation';
+import type { PrintRotation } from '../domain/printRotation';
 import PrintLabelThumbnail from './PrintLabelThumbnail';
 
 interface PrintReviewDialogProps {
@@ -131,7 +131,7 @@ export default function PrintReviewDialog({
               <ol>
                 <li>打开“打印机首选项”，创建与下方完全相同的用户自定义纸张。</li>
                 <li>在系统打印窗口选择该纸张，缩放保持 100%，边距选择“无”。</li>
-                <li>在这里旋转纸张和整组内容；字号保持不变，系统打印窗口按缩略图方向使用自定义纸张。</li>
+                <li>这里的旋转只改变文字方向；纸张尺寸、文字坐标和字号保持不变。</li>
                 <li>不要选择 A4 或信纸代替，否则内容会缩放或产生大片留白。</li>
               </ol>
             </aside>
@@ -164,8 +164,6 @@ export default function PrintReviewDialog({
                   <div className="print-label-previews">
                     {uniquePages.map(({ label, preset }, labelIndex) => {
                       const rotation = label.contentType === 'text' ? rotations[label.id] ?? 0 : 0;
-                      const outputWidthMm = rotationSwapsAxes(rotation) ? preset.heightMm : preset.widthMm;
-                      const outputHeightMm = rotationSwapsAxes(rotation) ? preset.widthMm : preset.heightMm;
                       const summary = label.content.trim().split(/\r?\n/)[0] || '未填写内容';
                       return (
                         <div className="print-label-preview-row" key={label.id}>
@@ -183,7 +181,7 @@ export default function PrintReviewDialog({
                                 <span>当前 {rotation}°</span>
                               </div>
                             ) : <span>图片保持原方向</span>}
-                            <span>输出纸张 {outputWidthMm} × {outputHeightMm} mm</span>
+                            <span>输出纸张 {preset.widthMm} × {preset.heightMm} mm</span>
                           </div>
                         </div>
                       );

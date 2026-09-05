@@ -56,7 +56,7 @@ describe('打印文字旋转', () => {
     expect(html).not.toContain('旋转第 3 个文字唛头');
   });
 
-  it('实际打印让纸张和文字一起旋转，字号保持不变', () => {
+  it('实际打印保持纸张宽高，并在原坐标逐行旋转且字号不变', () => {
     const created = textLabel('1546\n4548');
     const label = {
       ...created,
@@ -65,11 +65,11 @@ describe('打印文字旋转', () => {
     const group = createPrintPlan([label], defaultSizePresets).groups[0];
     const html = renderToStaticMarkup(<PrintPages group={group} rotations={{ [label.id]: 90 }} />);
 
-    expect(html).toContain(`@page print-page-normal { size: ${group.widthMm}mm ${group.heightMm}mm; margin: 0; }`);
-    expect(html).toContain(`@page print-page-rotated { size: ${group.heightMm}mm ${group.widthMm}mm; margin: 0; }`);
-    expect(html).toContain(`width:${group.heightMm}mm`);
-    expect(html).toContain(`height:${group.widthMm}mm`);
-    expect(html.match(/rotate\(90deg\)/g)).toHaveLength(1);
+    expect(html).toContain(`@page { size: ${group.widthMm}mm ${group.heightMm}mm; margin: 0; }`);
+    expect(html).toContain(`width:${group.widthMm}mm`);
+    expect(html).toContain(`height:${group.heightMm}mm`);
+    expect(html).not.toContain(`size: ${group.heightMm}mm ${group.widthMm}mm`);
+    expect(html.match(/rotate\(90deg\)/g)).toHaveLength(2);
     expect(html).toContain('transform:translate(-50%, -50%) rotate(90deg)');
     expect(html).not.toContain('scale(');
     expect(html.match(/font-size:12pt/g)).toHaveLength(2);
@@ -77,7 +77,8 @@ describe('打印文字旋转', () => {
     expect(html).toContain(`top:${label.textLines[0].placement.yPercent}%`);
     expect(html).toContain(`left:${label.textLines[1].placement.xPercent}%`);
     expect(html).toContain(`top:${label.textLines[1].placement.yPercent}%`);
-    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(3);
+    expect(html.match(/transform:translate\(-50%, -50%\) rotate\(90deg\)/g)).toHaveLength(2);
+    expect(html.match(/<section class="print-page"/g)).toHaveLength(1);
   });
 
   it('旋转后不缩小文字并保持该组可打印', () => {
@@ -96,7 +97,7 @@ describe('打印文字旋转', () => {
 
     expect(html).toContain('transform:translate(-50%, -50%) rotate(90deg)');
     expect(html).not.toContain('scale(');
-    expect(html).toContain('输出纸张 45 × 70 mm');
+    expect(html).toContain('输出纸张 70 × 45 mm');
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>打印这一组<\/button>/);
     expect(html).toContain('共 1 张，可以打印');
   });
@@ -134,7 +135,7 @@ describe('打印文字旋转', () => {
     expect(html).toContain('aspect-ratio:70 / 45');
   });
 
-  it('缩略图和实际打印一样旋转整张纸且不缩放文字', () => {
+  it('缩略图保持原纸张比例，并像实际打印一样逐行旋转文字', () => {
     const created = textLabel('1546\n4548');
     const label = {
       ...created,
@@ -146,9 +147,9 @@ describe('打印文字旋转', () => {
       rotation={90}
     />);
 
-    expect(html.match(/rotate\(90deg\)/g)).toHaveLength(1);
-    expect(html).toContain('aspect-ratio:45 / 70');
+    expect(html.match(/rotate\(90deg\)/g)).toHaveLength(2);
+    expect(html).toContain('aspect-ratio:70 / 45');
     expect(html).not.toContain('scale(');
-    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(3);
+    expect(html.match(/transform:translate\(-50%, -50%\) rotate\(90deg\)/g)).toHaveLength(2);
   });
 });
