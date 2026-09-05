@@ -33,14 +33,14 @@
 
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 |---|---|---|---|---|
-| Table Selection | `ExcelImporter` 语义表格；记录仍使用 `LabelList` | 本合同 | 多个矩形区域合并一条 / 按列每行一条 | 纯函数 + 浏览器 |
+| Table Selection | `ExcelImporter` 语义表格；记录仍使用 `LabelList` | 本合同 | 指针拖动 / Enter 或空格设起终点并用方向键扩展；多个矩形区域合并一条 / 按列每行一条 | 组件键盘测试 + 浏览器 |
 | Select/Listbox | 常规单选为原生 `select`；全部字号为共享 `FontSizePicker` | `DESIGN.md` | native / authored-live-preview | 键盘 + 浏览器弹层 |
 | Date | 不适用 | 本合同 | 不适用 | 不适用 |
 | Form | `LabelEditor` / `SizeStylePanel` 共享字段样式、即时文字样式补丁与自动排列 | 本合同 | edit / current-line / selected-lines / selected-text / all-text / auto-arrange | reducer + 浏览器验证 |
 | Scrollbar | `src/styles.css` 全局规则 | `DESIGN.md` | stable-gutter | 计算样式 |
 | Toast | `AppStatus` 单一实时状态区 | 本合同 | success / warning / error | live-region 检查 |
 | CRUD | `draftReducer` | 设计规格 | stay-inline | reducer + 完整流程 |
-| Quantity Stepper | `QuantityStepper`，由 `LabelList` 统一消费 | 本合同 | `1..1000` 加减 / 直接输入 | 组件 + 完整流程 |
+| Quantity Stepper | `QuantityStepper`，由 `LabelList` 统一消费 | 本合同 | `1..1000` 加减 / 直接输入 / 关联错误与纠正反馈 | 组件可访问性测试 + 完整流程 |
 | Multiline Selection | `App` 临时选择状态 + `textLines` 纯函数 + `LabelPreview` | 本合同 | 累加选择 / 空白清除 / 整组移动 | 纯函数 + 组件 + 浏览器 |
 | Preview History | `history` 纯函数 + `SourceHistory` + `draftReducer` | 本合同 | 最近 20 条 / 去重 / 再次使用 | 水合 + 完整流程 |
 | Print Rotation | `printRotation` 纯函数 + `PrintReviewDialog` / `PrintPages` | 本合同 | 文字 `0/90/180/270`，纸张固定 | 纯函数 + 打印 DOM + 浏览器 |
@@ -52,7 +52,7 @@
 | Button | 文字+意图样式 | 边线/底色加深 | 蓝色外环 | 轻微下压 | 可读且不可点 | 固定图标槽 | 邻近错误文字 |
 | Input | 白纸表面 | 边线加深 | 蓝色外环 | n/a | 灰底 | n/a | 红边+说明 |
 | Textarea | `resize: none`，可内部滚动 | 同 Input | 同 Input | n/a | 灰底 | n/a | 红边+说明 |
-| List | 复选框+摘要+行内打印数量 | 行底色变化 | 行内控件可见焦点 | 红色左边线；数量在 `1..1000` 钳制 | 边界加减按钮禁用 | 保留高度 | 行内原因 |
+| List | 复选框+摘要+行内打印数量 | 行底色变化 | 行内控件可见焦点 | 红色左边线；数量错误显示文字并通过 `aria-invalid` / `aria-describedby` 关联 | 边界加减按钮禁用 | 保留高度 | 空白、非整数或越界值说明纠正结果并钳制到 `1..1000` |
 | Draggable text | 每行细虚线边框 | 抓取光标、边框实线 | 已选行蓝色实线；活动行四角控制点、方向键微调 | 单击累加；整组拖动/方向键移动保持相对间距 | n/a | n/a | 溢出或重叠状态 |
 | Print area | 内边距范围 | 蓝色实线与控制点 | 蓝色外环、方向键微调 | 整体拖动或八方向缩放 | n/a | n/a | 自动限制在纸张内 |
 | Preview inline edit | 双击文字行进入原位编辑 | 文本光标 | 无输入边框，仅显示插入光标 | 输入即时同步正文 | n/a | n/a | 保留原内容并可按 Escape 撤销本次编辑 |
@@ -71,7 +71,7 @@
 - URL state: 草稿可能包含业务信息，不写入 URL。
 - Empty/no-results/error/loading treatment: 稳定空状态；导入错误在导入区；OCR 使用具名阶段和进度。
 - Selection scope: 仅当前草稿记录；显示精确选择数量，导入或排序不改变已选 ID，删除后焦点移到下一条或新增按钮。
-- Excel range scope: 单个工作表内可连续框选多个矩形区域；反向拖动自动规范化，重复区域去重。确认时按区域创建顺序、每个区域内从上到下再从左到右读取非空单元格，以换行合并为一条唛头；全部区域为空则不创建。“按列批量导入”仍保持每行一条。
+- Excel range scope: 单个工作表内可连续框选多个矩形区域；反向拖动自动规范化，重复区域去重。键盘用户聚焦单元格后按 Enter/空格设起点，用方向键扩展，再按 Enter/空格完成，Escape 取消当前范围；焦点和正在框选地址均可感知。确认时按区域创建顺序、每个区域内从上到下再从左到右读取非空单元格，以换行合并为一条唛头；全部区域为空则不创建。“按列批量导入”仍保持每行一条。
 - Image range scope: 每张图片拥有一个矩形识别区域；反向拖动自动规范化，并提供左、上、宽、高百分比字段作为键盘替代。整图识别优先查找“唛头”（包含紧邻强编号时常见的 `EESL` OCR 误识别前缀）：同行时提取右侧数据，表格中按标题位置提取同列下方数据，并在首个中英文逗号处停止；结构化 OCR 漏标时回退全文，仍未找到则以稀疏文字模式重试，两次均未找到时输出整图全部英数内容。手动框选输出框内英文、数字、空格和连接号，去除其他标点；包含明显唛头编号的行丢弃编号两侧的短 OCR 噪声，并保留识别行位置。
 - Text line/range scope: 每个换行是独立文字对象，保留独立位置、方向和整体样式。连续单击文字行累加选择，单击已选行只更换活动行，单击打印区域空白清空；批量样式、方向、拖动和方向键移动作用于全部已选行，整组移动采用共同边界。编辑器字符选区只影响当前唛头的字符范围，正文改变即清除旧范围，避免样式错位。选择状态不写入草稿；切换唛头时清空。旧草稿在读取时按换行迁移为独立行。
 
@@ -90,7 +90,7 @@
 | Resize workspace panel | 拖动右/下/右下边缘，或聚焦边缘后按方向键 | 即时本地更新 | 原位置 | 宽高随草稿保存在本机 | 恢复默认布局 | 保持边缘焦点 | 用户浏览器批注确认 |
 | Edit preview text | 双击某一文字行 | 即时预览 | 原位置 | 输入即时同步唛头正文；Enter 或失焦完成 | Escape 恢复进入编辑前内容 | 保持原位或返回文字对象 | 用户确认需求 |
 | Enter blank label | 在空白预览的裁切框内输入 | 即时预览 | 原位置 | 多行内容自动生成可独立操作的文字行 | 保留输入内容继续修改 | 保持输入框焦点 | 用户浏览器批注确认 |
-| Change print quantity | 唛头清单内减号、数字输入或加号 | 输入中保留草稿值 | 原列表 | 失焦或 Enter 钳制到 `1..1000`，下一次预览张数即时采用新值 | 空白与越界值归一；边界按钮禁用 | 保持数量控件焦点 | 用户浏览器批注确认 |
+| Change print quantity | 唛头清单内减号、数字输入或加号 | 输入中保留草稿值并立即显示关联错误 | 原列表 | 失焦或 Enter 钳制到 `1..1000`，说明纠正后的值，下一次预览张数即时采用新值 | 空白归一为 1、越界钳制、非整数恢复当前值；边界按钮禁用 | 保持数量控件焦点 | 用户浏览器批注确认 |
 | Select/move text lines | 连续单击文字行后拖动或按方向键 | 即时预览 | 原位置 | 已选行保持相对间距共同移动 | 单击打印区域空白清除选择 | 保持活动文字行焦点 | 用户浏览器批注确认 |
 | Collapse workspace panel | 点击任一板块“收起” | 即时本地更新 | 同一工作区边缘栏 | 收起状态随草稿保存在本机 | 点击“展开”恢复原宽高 | 移到展开按钮 | 用户浏览器批注确认 |
 | Crop and recognize image | 图片上框选或填写百分比后识别 | 可取消的具名 OCR 进度 | 新增记录 | 报告文件名并选中新记录 | 保留图片、可重选区域或改用原图 | 文件项或新记录 | 用户确认需求 |
@@ -145,7 +145,7 @@
 
 ## Verification
 
-- Required static commands: TypeScript、Vitest、Vite build、premium strict audit、DESIGN lint。
+- Required static commands: TypeScript、Vitest、`pnpm run test:a11y`、Vite build、premium strict audit、DESIGN lint。
 - Browser/device/locale/theme matrix: Windows Chromium 桌面、390px 窄屏、`zh-CN`、强制颜色与 reduced motion。
 - Accessibility checks: 键盘、焦点、标签、live region、对话框焦点约束和 200% 缩放抽查。
 - Component-state/visual regression coverage: 空、单行/多行选择、错误、OCR 进度、自动缩小、旋转溢出、历史、打印、确认框。

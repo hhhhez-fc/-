@@ -11,6 +11,12 @@
     "Toast",
     "CRUD"
   ],
+  "requiredApplicationCapabilities": [
+    "Quantity Stepper",
+    "Multiline Selection",
+    "Preview History",
+    "Print Rotation"
+  ],
   "ownership": {
     "Select/Listbox": "native",
     "Quantity Stepper": "authored",
@@ -18,10 +24,11 @@
     "Preview History": "authored",
     "Print Rotation": "authored"
   },
-  "requiredCommands": ["unit", "typecheck", "build"],
+  "requiredCommands": ["unit", "accessibility", "typecheck", "build"],
   "commands": {
     "unit": "pnpm test",
-    "typecheck": "pnpm exec tsc -b",
+    "accessibility": "pnpm run test:a11y",
+    "typecheck": "pnpm run typecheck",
     "build": "pnpm run build"
   },
   "evidence": {
@@ -29,9 +36,10 @@
     "failurePaths": "tests/printing.spec.ts",
     "quantityStepper": "tests/quantity-controls.spec.tsx",
     "multilineSelection": "tests/multiline-interactions.spec.tsx",
-    "previewHistory": "tests/history.spec.ts",
-    "printRotation": "tests/print-rotation.spec.tsx",
+    "previewHistory": "tests/app.spec.tsx",
+    "printRotation": "tests/app.spec.tsx",
     "excelRegionMerge": "tests/excel-import.spec.ts",
-    "shrinkOnlyLayout": "tests/domain.spec.ts"
+    "shrinkOnlyLayout": "tests/domain.spec.ts",
+    "accessibility": "tests/accessibility.spec.tsx"
   }
 }

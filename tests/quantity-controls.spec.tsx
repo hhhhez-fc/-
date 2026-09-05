@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createLabel } from '../src/domain/labels';
@@ -61,9 +61,16 @@ describe('列表打印数量控件', () => {
     const input = screen.getByRole('spinbutton', { name: '第 1 条唛头的打印数量' });
     await user.clear(input);
     await user.type(input, '0{Enter}');
+    expect(input.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.getByText('打印数量超出范围，已调整为 1。').id).toBe(input.getAttribute('aria-describedby'));
     expect(onCommit).toHaveBeenLastCalledWith(minimum.id, 1);
     await user.clear(input);
-    await user.type(input, '1001{Enter}');
+    await user.type(input, '1001');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText('打印数量必须在 1 至 1000 之间。').id).toBe(input.getAttribute('aria-describedby'));
+    await user.keyboard('{Enter}');
+    expect(input.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.getByText('打印数量超出范围，已调整为 1000。').id).toBe(input.getAttribute('aria-describedby'));
     expect(onCommit).toHaveBeenLastCalledWith(minimum.id, 1000);
 
     const maximum = { ...minimum, quantity: 1000 };
@@ -88,9 +95,39 @@ describe('列表打印数量控件', () => {
 
     const input = screen.getByRole('spinbutton', { name: '第 1 条唛头的打印数量' });
     await user.clear(input);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText('请输入 1 至 1000 的整数。').id).toBe(input.getAttribute('aria-describedby'));
     await user.tab();
 
     expect((input as HTMLInputElement).value).toBe('1');
+    expect(input.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.getByText('打印数量为空，已调整为 1。').id).toBe(input.getAttribute('aria-describedby'));
     expect(onCommit).toHaveBeenLastCalledWith(label.id, 1);
+  });
+
+  it('非整数输入显示关联错误并在失焦时恢复当前打印数量', () => {
+    const onCommit = vi.fn();
+    const label = createLabel({ content: 'DECIMAL', quantity: 6, source: 'manual', needsReview: false });
+    render(<LabelList
+      labels={[label]}
+      activeLabelId={label.id}
+      selectedLabelIds={[]}
+      onActivate={() => undefined}
+      onToggleSelect={() => undefined}
+      onQuantityChange={onCommit}
+      onDuplicate={() => undefined}
+      onDelete={() => undefined}
+    />);
+
+    const input = screen.getByRole('spinbutton', { name: '第 1 条唛头的打印数量' });
+    fireEvent.change(input, { target: { value: '1.5' } });
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText('请输入 1 至 1000 的整数。').id).toBe(input.getAttribute('aria-describedby'));
+    fireEvent.blur(input);
+
+    expect((input as HTMLInputElement).value).toBe('6');
+    expect(input.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.getByText('打印数量必须为整数，已恢复为 6。').id).toBe(input.getAttribute('aria-describedby'));
+    expect(onCommit).toHaveBeenLastCalledWith(label.id, 6);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type ChangeEvent, type KeyboardEvent, type PointerEvent } from 'react';
 import {
   formatCellRange,
   identifyExcelColumns,
@@ -30,6 +30,8 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
   const [mode, setMode] = useState<'columns' | 'regions'>('columns');
   const [regions, setRegions] = useState<CellRange[]>([]);
   const [dragRange, setDragRange] = useState<CellRange | null>(null);
+  const [keyboardRange, setKeyboardRange] = useState<CellRange | null>(null);
+  const keyboardHelpId = useId();
   const activeSheet = useMemo(
     () => workbook?.sheets.find((sheet) => sheet.name === sheetName) ?? null,
     [sheetName, workbook],
@@ -37,23 +39,28 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
   const matrix = useMemo(() => activeSheet ? [activeSheet.headers, ...activeSheet.rows] : [], [activeSheet]);
   const columnCount = useMemo(() => matrix.reduce((maximum, row) => Math.max(maximum, row.length), 0), [matrix]);
 
+  const appendRegion = useCallback((range: CellRange) => {
+    const normalized = normalizeCellRange(range);
+    setRegions((current) => current.some((item) => formatCellRange(item) === formatCellRange(normalized))
+      ? current
+      : [...current, normalized]);
+  }, []);
+
   useEffect(() => {
     if (!dragRange) return;
     const finish = () => {
-      const normalized = normalizeCellRange(dragRange);
-      setRegions((current) => current.some((range) => formatCellRange(range) === formatCellRange(normalized))
-        ? current
-        : [...current, normalized]);
+      appendRegion(dragRange);
       setDragRange(null);
     };
     window.addEventListener('pointerup', finish, { once: true });
     return () => window.removeEventListener('pointerup', finish);
-  }, [dragRange]);
+  }, [appendRegion, dragRange]);
 
   const selectSheet = (nextName: string, parsed = workbook) => {
     setSheetName(nextName);
     setRegions([]);
     setDragRange(null);
+    setKeyboardRange(null);
     const sheet = parsed?.sheets.find((item) => item.name === nextName);
     if (!sheet) return;
     const columns = identifyExcelColumns(sheet.headers);
@@ -118,6 +125,7 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
     onStatus(`已从 ${activeSheet.name} 提取 1 条唛头`);
     setWorkbook(null);
     setRegions([]);
+    setKeyboardRange(null);
   };
 
   const startSelection = (event: PointerEvent<HTMLTableCellElement>, row: number, col: number) => {
@@ -128,6 +136,38 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
 
   const extendSelection = (row: number, col: number) => {
     setDragRange((current) => current ? { ...current, endRow: row, endCol: col } : null);
+  };
+
+  const handleCellKeyDown = (event: KeyboardEvent<HTMLButtonElement>, row: number, col: number) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (keyboardRange) {
+        appendRegion({ ...keyboardRange, endRow: row, endCol: col });
+        setKeyboardRange(null);
+      } else {
+        setKeyboardRange({ startRow: row, startCol: col, endRow: row, endCol: col });
+      }
+      return;
+    }
+    if (event.key === 'Escape' && keyboardRange) {
+      event.preventDefault();
+      setKeyboardRange(null);
+      return;
+    }
+    const movement = {
+      ArrowUp: [-1, 0],
+      ArrowDown: [1, 0],
+      ArrowLeft: [0, -1],
+      ArrowRight: [0, 1],
+    }[event.key];
+    if (!movement) return;
+    event.preventDefault();
+    const nextRow = Math.max(0, Math.min(matrix.length - 1, row + movement[0]));
+    const nextCol = Math.max(0, Math.min(columnCount - 1, col + movement[1]));
+    event.currentTarget.closest('table')
+      ?.querySelector<HTMLButtonElement>(`[data-sheet-row="${nextRow}"][data-sheet-col="${nextCol}"]`)
+      ?.focus();
+    setKeyboardRange((current) => current ? { ...current, endRow: nextRow, endCol: nextCol } : null);
   };
 
   const cellSelected = (row: number, col: number, range: CellRange) => {
@@ -179,26 +219,47 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
           </button>
           </> : <div className="region-importer">
             <p className="mapping-note">按住鼠标拖过单元格。可连续框选多个区域，确认后会按顺序合并为一条唛头。</p>
+            <p className="mapping-note" id={keyboardHelpId}>键盘操作：聚焦单元格后按 Enter 或空格设起点，用方向键扩展，再按 Enter 或空格完成；Escape 取消。</p>
             <div className="sheet-grid-wrap">
-              <table className="sheet-grid" aria-label={`${activeSheet.name} 可框选区域`}>
+              <table className="sheet-grid" aria-label={`${activeSheet.name} 可框选区域`} aria-describedby={keyboardHelpId}>
                 <thead><tr><th aria-label="行号" />{Array.from({ length: columnCount }, (_, col) => <th key={col}>{formatCellRange({ startRow: 0, endRow: 0, startCol: col, endCol: col }).split(':')[0].replace(/\d+/g, '')}</th>)}</tr></thead>
                 <tbody>{matrix.map((row, rowIndex) => <tr key={rowIndex}>
                   <th scope="row">{rowIndex + 1}</th>
                   {Array.from({ length: columnCount }, (_, colIndex) => {
                     const selectedIndex = regions.findIndex((range) => cellSelected(rowIndex, colIndex, range));
-                    const isDraft = dragRange ? cellSelected(rowIndex, colIndex, dragRange) : false;
+                    const draft = dragRange ?? keyboardRange;
+                    const isDraft = draft ? cellSelected(rowIndex, colIndex, draft) : false;
+                    const address = formatCellRange({ startRow: rowIndex, endRow: rowIndex, startCol: colIndex, endCol: colIndex }).split(':')[0];
+                    const value = String(row[colIndex] ?? '');
                     return <td
                       key={colIndex}
                       className={`${selectedIndex >= 0 ? `is-region region-${selectedIndex % 4}` : ''} ${isDraft ? 'is-draft-region' : ''}`}
                       onPointerDown={(event) => startSelection(event, rowIndex, colIndex)}
                       onPointerEnter={() => extendSelection(rowIndex, colIndex)}
-                    >{String(row[colIndex] ?? '')}</td>;
+                    >
+                      <button
+                        type="button"
+                        className="sheet-cell-button"
+                        aria-label={`单元格 ${address}：${value || '空白'}`}
+                        data-sheet-row={rowIndex}
+                        data-sheet-col={colIndex}
+                        onClick={(event) => {
+                          // Pointer selection is completed by the table cell's pointer handlers.
+                          // A zero-detail click is synthesized by keyboard/assistive technology.
+                          if (event.detail === 0) {
+                            appendRegion({ startRow: rowIndex, startCol: colIndex, endRow: rowIndex, endCol: colIndex });
+                          }
+                        }}
+                        onKeyDown={(event) => handleCellKeyDown(event, rowIndex, colIndex)}
+                      >{value}</button>
+                    </td>;
                   })}
                 </tr>)}</tbody>
               </table>
             </div>
             <div className="region-list" aria-live="polite">
-              {regions.length === 0 ? <span>尚未框选区域</span> : regions.map((range, index) => (
+              {keyboardRange && <span>正在键盘框选 {formatCellRange(keyboardRange)}</span>}
+              {!keyboardRange && regions.length === 0 ? <span>尚未框选区域</span> : regions.map((range, index) => (
                 <button type="button" key={formatCellRange(range)} onClick={() => setRegions((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
                   区域 {index + 1} · {formatCellRange(range)} <b aria-hidden="true">×</b>
                 </button>

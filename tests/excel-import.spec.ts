@@ -2,6 +2,7 @@
 
 import * as XLSX from 'xlsx';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseWorkbook, rowsToLabelsWithColumns } from '../src/domain/importing';
@@ -100,6 +101,54 @@ describe('Excel 工作簿导入', () => {
       source: 'excel',
     });
     expect(onStatus).toHaveBeenLastCalledWith('已从 外箱唛头 提取 1 条唛头');
+  });
+
+  it('只用键盘即可建立多个矩形区域并按顺序合并', async () => {
+    const user = userEvent.setup();
+    const onImport = vi.fn();
+    render(createElement(ExcelImporter, {
+      sizePresetId: 'small',
+      purpose: 'carton',
+      onImport,
+      onStatus: vi.fn(),
+    }));
+    await importWorkbook(createWorkbookFile([
+      ['A', 'B'],
+      ['FY-01', 'BLUE'],
+      ['MADE IN CHINA', ''],
+      ['FY-02', 'RED'],
+    ]));
+    await user.click(screen.getByRole('button', { name: '框选区域' }));
+
+    const firstCell = screen.getByRole('button', { name: '单元格 A2：FY-01' });
+    firstCell.focus();
+    await user.keyboard('{Enter}{ArrowRight}{ArrowDown}{Enter}');
+    expect(screen.getByRole('button', { name: /区域 1 · A2:B3/ })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '单元格 B3：空白' }));
+
+    const secondCell = screen.getByRole('button', { name: '单元格 A4：FY-02' });
+    secondCell.focus();
+    await user.keyboard('{Enter}{ArrowRight}{Enter}');
+    expect(screen.getByRole('button', { name: /区域 2 · A4:B4/ })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: '提取 2 个区域' }));
+    expect(onImport).toHaveBeenCalledTimes(1);
+    expect(onImport.mock.calls[0][0][0].content).toBe('FY-01\nBLUE\nMADE IN CHINA\nFY-02\nRED');
+  });
+
+  it('辅助技术合成单元格点击时可直接添加单格区域', async () => {
+    render(createElement(ExcelImporter, {
+      sizePresetId: 'small',
+      purpose: 'carton',
+      onImport: vi.fn(),
+      onStatus: vi.fn(),
+    }));
+    await importWorkbook(createWorkbookFile([['A'], ['FY-01']]));
+    fireEvent.click(screen.getByRole('button', { name: '框选区域' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '单元格 A2：FY-01' }), { detail: 0 });
+
+    expect(screen.getByRole('button', { name: /区域 1 · A2:A2/ })).toBeTruthy();
   });
 
   it('框选空区域后显示错误且不导入', async () => {
