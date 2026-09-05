@@ -187,13 +187,15 @@ describe('最终审查回归', () => {
     expect(validateLabelForPrint(label, defaultSizePresets[1])).toEqual([]);
   });
 
-  it.each([['1e20', 120], ['0', 8], ['-9', 8]])('编辑器把字号 %s 钳制到可编辑范围', (value, expected) => {
+  it.each([['1e20', 120], ['0', 8], ['-9', 8]])('编辑器在失焦后把字号 %s 钳制到可编辑范围', (value, expected) => {
     const label = labelFor('A');
     const onChange = vi.fn();
     render(<LabelEditor label={label} activeLineId={label.textLines[0].id} selectedLineIds={[label.textLines[0].id]}
       onActiveLineChange={() => undefined} onSelectLine={() => undefined} onChange={onChange}
       onPrintPreview={() => undefined} reviewErrors={[]} onDuplicate={() => undefined} onDelete={() => undefined} />);
-    fireEvent.change(screen.getByRole('spinbutton', { name: '字号（pt）' }), { target: { value } });
+    const input = screen.getByRole('spinbutton', { name: '字号（pt）' });
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
     expect(onChange.mock.lastCall?.[0].textLines[0].style.fontSizePt).toBe(expected);
   });
 

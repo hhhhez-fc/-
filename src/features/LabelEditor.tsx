@@ -1,5 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
-import { clampFontSizePt, type InlineTextStyle, type LabelRecord } from '../domain/labels';
+import { clampFontSizePt, MIN_FONT_SIZE_PT, MAX_FONT_SIZE_PT, type InlineTextStyle, type LabelRecord } from '../domain/labels';
 import { buildImmediateTextStylePatch } from '../domain/richText';
 import { updateSelectedTextLines, type TextLinePatch } from '../domain/textLines';
 
@@ -21,6 +21,7 @@ export default function LabelEditor({ label, activeLineId, selectedLineIds, onAc
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const activeLine = label.textLines.find((line) => line.id === activeLineId) ?? label.textLines[0];
   const activeLineIndex = Math.max(0, label.textLines.findIndex((line) => line.id === activeLine?.id));
+  const [fontSizeDraft, setFontSizeDraft] = useState<string | null>(null);
   const [partialStyle, setPartialStyle] = useState<InlineTextStyle>({
     fontFamily: activeLine?.style.fontFamily ?? label.style.fontFamily,
     fontSizePt: activeLine?.style.fontSizePt ?? label.style.fontSizePt,
@@ -30,6 +31,7 @@ export default function LabelEditor({ label, activeLineId, selectedLineIds, onAc
   });
   const selectedCount = Math.max(0, selection.end - selection.start);
   const targetIds = selectedLineIds.length ? selectedLineIds : activeLine ? [activeLine.id] : [];
+  useEffect(() => setFontSizeDraft(null), [label.id, activeLine?.id]);
   useEffect(() => {
     setPartialStyle({
       fontFamily: activeLine?.style.fontFamily ?? label.style.fontFamily,
@@ -70,6 +72,11 @@ export default function LabelEditor({ label, activeLineId, selectedLineIds, onAc
       return;
     }
     onChange(buildImmediateTextStylePatch(label, activeLine.id, selection, next));
+  };
+  const commitFontSize = () => {
+    if (fontSizeDraft === null) return;
+    updatePartialStyle({ fontSizePt: clampFontSizePt(Number(fontSizeDraft)) });
+    setFontSizeDraft(null);
   };
   return (
     <form className="label-editor" noValidate onSubmit={(event) => event.preventDefault()}>
@@ -117,7 +124,27 @@ export default function LabelEditor({ label, activeLineId, selectedLineIds, onAc
             <option value={'"Times New Roman", serif'}>Times New Roman</option>
             <option value={'Consolas, monospace'}>等宽字体</option>
           </select></label>
-          <label className="field"><span>字号（pt）</span><input type="number" min="8" max="120" value={partialStyle.fontSizePt ?? 32} onChange={(event) => updatePartialStyle({ fontSizePt: clampFontSizePt(Number(event.target.value)) })} /></label>
+          <label className="field"><span>字号（pt）</span><input
+            type="number"
+            min={MIN_FONT_SIZE_PT}
+            max={MAX_FONT_SIZE_PT}
+            value={fontSizeDraft ?? partialStyle.fontSizePt ?? 32}
+            onChange={(event) => {
+              const raw = event.target.value;
+              setFontSizeDraft(raw);
+              const fontSizePt = Number(raw);
+              if (raw.trim() && Number.isFinite(fontSizePt) && fontSizePt >= MIN_FONT_SIZE_PT && fontSizePt <= MAX_FONT_SIZE_PT) {
+                updatePartialStyle({ fontSizePt });
+              }
+            }}
+            onBlur={commitFontSize}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                commitFontSize();
+              }
+            }}
+          /></label>
         </div>
         {activeLine && <label className="field line-orientation"><span>{selectedLineIds.length ? '所选行方向' : '本行方向'}</span><select
           aria-label={selectedLineIds.length ? '所选行方向' : '本行方向'}
