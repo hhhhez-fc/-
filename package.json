@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:a11y": "vitest run tests/accessibility.spec.tsx tests/excel-import.spec.ts tests/quantity-controls.spec.tsx tests/multiline-interactions.spec.tsx tests/app.spec.tsx",
     "test:watch": "vitest"
   },
   "dependencies": {

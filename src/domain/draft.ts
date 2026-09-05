@@ -9,8 +9,13 @@ import {
   type SizePreset,
   validateSizePreset,
 } from './labels';
-import { validateLabelForPrint } from './layout';
 import { syncTextLines } from './textLines';
+import {
+  hydrateRecentLabels,
+  recordRecentLabels,
+  type RecentLabelEntry,
+  type RecentLabelInput,
+} from './history';
 import {
   DEFAULT_WORKSPACE_LAYOUT,
   hydrateWorkspaceLayout,
@@ -42,6 +47,7 @@ export interface DraftState {
   activeLabelId: string | null;
   selectedLabelIds: string[];
   recentSizes: SizePreset[];
+  recentLabels: RecentLabelEntry[];
   lastPrintedSize: LastPrintedSize | null;
   workspaceLayout: WorkspaceLayout;
 }
@@ -83,7 +89,10 @@ export function resolveDefaultNewLabelPreset(
   };
 }
 
-export function createInitialDraft(lastPrintedSize: LastPrintedSize | null = null): DraftState {
+export function createInitialDraft(
+  lastPrintedSize: LastPrintedSize | null = null,
+  recentLabels: RecentLabelEntry[] = [],
+): DraftState {
   const normalizedLastPrintedSize = normalizeLastPrintedSize(lastPrintedSize);
   const basePresets = defaultSizePresets.map((preset) => ({ ...preset }));
   const draftSeed = {
@@ -104,8 +113,7 @@ export function createInitialDraft(lastPrintedSize: LastPrintedSize | null = nul
     contentType: 'text',
     sizeType: 'small',
     sizePresetId: initialPreset.id,
-    needsReview: true,
-    reviewReason: '请填写唛头内容并完成校对',
+    needsReview: false,
   });
   return {
     version: 1,
@@ -117,6 +125,7 @@ export function createInitialDraft(lastPrintedSize: LastPrintedSize | null = nul
     activeLabelId: blankLabel.id,
     selectedLabelIds: [],
     recentSizes: [],
+    recentLabels: hydrateRecentLabels(recentLabels),
     lastPrintedSize: normalizedLastPrintedSize,
     workspaceLayout: {
       version: 2,
@@ -138,11 +147,11 @@ export type DraftAction =
   | { type: 'apply-style-to-selected'; style: LabelStyle }
   | { type: 'delete-label'; id: string }
   | { type: 'duplicate-label'; id: string }
-  | { type: 'mark-reviewed'; id: string }
   | { type: 'add-size-preset'; preset: SizePreset }
   | { type: 'update-size-preset'; id: string; patch: Partial<Omit<SizePreset, 'id'>> }
   | { type: 'remove-size-preset'; id: string }
   | { type: 'remember-size'; preset: SizePreset }
+  | { type: 'record-recent-labels'; entries: RecentLabelInput[]; previewedAt: number }
   | { type: 'remember-printed-size'; widthMm: number; heightMm: number }
   | { type: 'set-panel-order'; order: WorkspacePanelId[] }
   | { type: 'resize-panel'; id: WorkspacePanelId; patch: Partial<WorkspacePanelSize> }
@@ -159,8 +168,6 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
         activeLabelId: action.label.id,
       };
     case 'update-label': {
-      const requiresReview = ['content', 'quantity', 'sides', 'contentType']
-        .some((field) => Object.prototype.hasOwnProperty.call(action.patch, field));
       return {
         ...state,
         labels: state.labels.map((label) => {
@@ -173,7 +180,6 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
               ...(contentChanged
                 ? { textStyleRanges: [], textLines: syncTextLines(label.textLines, action.patch.content ?? '') }
                 : {}),
-              ...(requiresReview ? { needsReview: true, reviewReason: '内容或数量已修改，请重新校对' } : {}),
               id: label.id,
             };
         }),
@@ -241,23 +247,10 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
         placement: { ...source.placement },
         printArea: source.printArea ? { ...source.printArea } : undefined,
         textLines: source.textLines.map((line) => ({ ...line, placement: { ...line.placement }, style: { ...line.style } })),
-        needsReview: true,
-        reviewReason: '复制后请确认内容和数量',
       };
       const labels = [...state.labels];
       labels.splice(sourceIndex + 1, 0, duplicate);
       return { ...state, labels, activeLabelId: duplicate.id };
-    }
-    case 'mark-reviewed': {
-      const label = state.labels.find((candidate) => candidate.id === action.id);
-      const preset = state.sizePresets.find((candidate) => candidate.id === label?.sizePresetId);
-      if (!label || !preset) return state;
-      const reviewed = { ...label, needsReview: false, reviewReason: undefined };
-      if (validateSizePreset(preset).length || validateLabelForPrint(reviewed, preset).length) return state;
-      return {
-        ...state,
-        labels: state.labels.map((candidate) => candidate.id === action.id ? reviewed : candidate),
-      };
     }
     case 'add-size-preset':
       if (state.sizePresets.some((preset) => preset.id === action.preset.id)) return state;
@@ -281,6 +274,11 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
       ].slice(0, 8);
       return { ...state, recentSizes };
     }
+    case 'record-recent-labels':
+      return {
+        ...state,
+        recentLabels: recordRecentLabels(state.recentLabels, action.entries, action.previewedAt),
+      };
     case 'remember-printed-size': {
       const lastPrintedSize = normalizeLastPrintedSize({ widthMm: action.widthMm, heightMm: action.heightMm });
       return lastPrintedSize ? { ...state, lastPrintedSize } : state;
@@ -310,6 +308,6 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
         },
       };
     case 'clear-draft':
-      return createInitialDraft(state.lastPrintedSize);
+      return createInitialDraft(state.lastPrintedSize, state.recentLabels);
   }
 }

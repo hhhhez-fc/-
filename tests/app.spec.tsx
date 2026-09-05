@@ -1,16 +1,49 @@
+// @vitest-environment jsdom
+
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
 import { createInitialDraft } from '../src/domain/draft';
 import { createLabel, defaultSizePresets } from '../src/domain/labels';
+import { recordRecentLabels, type RecentLabelInput } from '../src/domain/history';
+import { DRAFT_STORAGE_KEY } from '../src/domain/storage';
 import LabelPreview from '../src/features/LabelPreview';
 import ImageCropSelector from '../src/features/ImageCropSelector';
 import PrintReviewDialog, * as printReviewModule from '../src/features/PrintReviewDialog';
 import PrintPages from '../src/features/PrintPages';
 import SizeStylePanel from '../src/features/SizeStylePanel';
 import LabelEditor from '../src/features/LabelEditor';
+import SourceHistory from '../src/features/SourceHistory';
 import { createPrintPlan } from '../src/domain/printing';
 import { buildFontSizePreviewLabel } from '../src/domain/fontSizePreview';
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  window.localStorage.clear();
+});
+
+async function expectStoredHistory(expectedContents: string[]) {
+  await waitFor(() => {
+    const saved = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    expect(saved).not.toBeNull();
+    expect(JSON.parse(saved!).recentLabels.map((entry: { label: { content: string } }) => entry.label.content))
+      .toEqual(expectedContents);
+  });
+}
+
+const recentInput = (content: string, preset = defaultSizePresets[0]): RecentLabelInput => ({
+  label: createLabel({
+    content,
+    quantity: 2,
+    source: 'manual',
+    sizePresetId: preset.id,
+    needsReview: false,
+  }),
+  preset: { ...preset },
+});
 
 describe('唛头打印工作台', () => {
   it('首次打开自动创建空白唛头，并可在预览内直接输入', () => {
@@ -23,6 +56,10 @@ describe('唛头打印工作台', () => {
     expect(html).toContain('未填写内容');
     expect(html).toContain('aria-label="直接输入唛头内容"');
     expect(html).toContain('placeholder="在此输入唛头内容"');
+    expect(html).toContain('唛头清单');
+    expect(html).not.toContain('待校对');
+    expect(html).not.toContain('<span>基础数量</span>');
+    expect(html).toContain('张贴面数');
   });
 
   it('将三个工作区板块暴露为可拖动、边缘可调整大小的区域，并把历史并入来源', () => {
@@ -30,7 +67,7 @@ describe('唛头打印工作台', () => {
 
     expect(html).not.toContain('aria-labelledby="history-title"');
     expect(html).toContain('使用过的唛头');
-    expect(html).toContain('最近使用的唛头会保存在录入来源中');
+    expect(html).toContain('进入打印预览后自动保存最近 20 条');
     expect(html.match(/data-testid="panel-drag-handle"/g)).toHaveLength(3);
     expect(html.match(/class="[^"]*panel-drag-handle[^"]*"/g)).toHaveLength(3);
     expect(html.match(/role="separator"[^>]*aria-label="调整[^\"]*宽度"/g)).toHaveLength(3);
@@ -68,7 +105,134 @@ describe('唛头打印工作台', () => {
   });
 });
 
+describe('使用过的唛头', () => {
+  it('显示空状态，并通过原生按钮恢复历史条目', async () => {
+    const user = userEvent.setup();
+    const onRestore = vi.fn();
+    const entry = recordRecentLabels([], [recentInput('FY-01\nMADE IN CHINA')], 1000)[0];
+    const { rerender } = render(<SourceHistory entries={[]} onRestore={onRestore} />);
+
+    expect(screen.getByText('暂时没有使用记录')).toBeTruthy();
+    rerender(<SourceHistory entries={[entry]} onRestore={onRestore} />);
+    expect(screen.getByText('FY-01')).toBeTruthy();
+    expect(screen.getByText('100 × 60 mm · 2 件 · 手动')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '再次使用' }));
+    expect(onRestore).toHaveBeenCalledWith(entry);
+  });
+
+  it('恢复时对物理和布局字段相同的同 ID 预设直接复用', async () => {
+    const user = userEvent.setup();
+    const entry = recordRecentLabels([], [recentInput('REUSE-PRESET')], 1000)[0];
+    const state = createInitialDraft(null, [entry]);
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '再次使用' }));
+    expect(screen.getByText('已从使用记录新增一条唛头')).toBeTruthy();
+
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(DRAFT_STORAGE_KEY) ?? '{}');
+      const restored = saved.labels?.find((label: { content: string }) => label.content === 'REUSE-PRESET');
+      expect(restored?.id).not.toBe(entry.label.id);
+      expect(restored?.textLines.map((line: { id: string }) => line.id)).not.toEqual(entry.label.textLines.map((line) => line.id));
+      expect(restored?.sizePresetId).toBe('large');
+      expect(saved.sizePresets).toHaveLength(2);
+    });
+  });
+
+  it('恢复时为字段已变更的同 ID 预设创建新 ID 并同步唛头引用', async () => {
+    const user = userEvent.setup();
+    const entry = recordRecentLabels([], [recentInput('SNAPSHOT-SIZE')], 1000)[0];
+    const initial = createInitialDraft(null, [entry]);
+    const state = {
+      ...initial,
+      sizePresets: initial.sizePresets.map((preset) => preset.id === 'large'
+        ? { ...preset, widthMm: 88 }
+        : preset),
+    };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '再次使用' }));
+
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(DRAFT_STORAGE_KEY) ?? '{}');
+      const restored = saved.labels?.find((label: { content: string }) => label.content === 'SNAPSHOT-SIZE');
+      expect(restored?.sizePresetId).not.toBe('large');
+      expect(saved.sizePresets.find((preset: { id: string }) => preset.id === 'large').widthMm).toBe(88);
+      expect(saved.sizePresets.find((preset: { id: string }) => preset.id === restored?.sizePresetId))
+        .toMatchObject({ widthMm: 100, heightMm: 60 });
+      expect(saved.sizePresets).toHaveLength(3);
+    });
+  });
+});
+
 describe('打印检查', () => {
+  it('合法的旧待校对唛头可进入预览并立即写入历史', async () => {
+    const user = userEvent.setup();
+    const legacy = createLabel({ content: 'LEGACY-READY', quantity: 1, source: 'manual', needsReview: true });
+    const state = { ...createInitialDraft(), labels: [legacy], activeLabelId: legacy.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog', { name: /可以打印/ })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '关闭' }));
+    expect(screen.getByText('使用过的唛头')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '再次使用' })).toBeTruthy();
+    await expectStoredHistory(['LEGACY-READY']);
+  });
+
+  it('列表内修改打印数量会更新下一次预览的总张数', async () => {
+    const user = userEvent.setup();
+    const label = createLabel({ content: 'QUANTITY-PREVIEW', quantity: 1, sides: 2, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '增加第 1 条唛头的打印数量' }));
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog', { name: '共 4 张，可以打印' })).toBeTruthy();
+    expect(screen.getByText('1 × 程序生成 4 张 = 实际打印 4 张')).toBeTruthy();
+  });
+
+  it('单条打印预览只记录当前合法唛头', async () => {
+    const user = userEvent.setup();
+    const active = createLabel({ content: 'ACTIVE', quantity: 1, source: 'manual', needsReview: false });
+    const other = createLabel({ content: 'OTHER', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [active, other], activeLabelId: active.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    await expectStoredHistory(['ACTIVE']);
+  });
+
+  it('顶部打印检查记录所有合法唛头，并忽略阻塞项和重复打印页', async () => {
+    const user = userEvent.setup();
+    const first = createLabel({ content: 'FIRST', quantity: 1, source: 'manual', needsReview: false });
+    const blocked = createLabel({ content: '', quantity: 1, source: 'manual', needsReview: false });
+    const second = createLabel({ content: 'SECOND', quantity: 2, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [first, blocked, second], activeLabelId: first.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '检查并打印' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    await expectStoredHistory(['SECOND', 'FIRST']);
+  });
+
+  it('本机存储写入失败不阻止打开预览', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+    const label = createLabel({ content: 'PRINTABLE', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
   it('把精确毫米尺寸写入剪贴板，并报告浏览器拒绝写入', async () => {
     const clipboard = printReviewModule as unknown as {
       copyPaperSizeToClipboard: (
@@ -87,7 +251,7 @@ describe('打印检查', () => {
     })).resolves.toBe(false);
   });
 
-  it('明确要求系统打印份数保持 1，并按基础数量乘张贴面数生成打印张数', () => {
+  it('明确要求系统打印份数保持 1，并按列表打印数量乘张贴面数生成打印张数', () => {
     const label = createLabel({
       content: 'FYF-TTT0103',
       quantity: 3,
@@ -99,6 +263,8 @@ describe('打印检查', () => {
     const html = renderToStaticMarkup(<PrintReviewDialog
       open
       plan={plan}
+      rotations={{}}
+      onRotateLabel={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}
@@ -119,6 +285,8 @@ describe('打印检查', () => {
     const html = renderToStaticMarkup(<PrintReviewDialog
       open
       plan={plan}
+      rotations={{}}
+      onRotateLabel={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}
@@ -161,6 +329,31 @@ describe('打印检查', () => {
     expect(html).toContain('width:40mm');
     expect(html).toContain('height:20mm');
   });
+
+  it('打印检查可循环旋转文字，并在关闭后清除临时角度', async () => {
+    const user = userEvent.setup();
+    const label = createLabel({ content: 'ROTATE-ME', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+    const rotate = screen.getByRole('button', { name: '旋转 70 × 45 mm 第 1 个文字唛头 ROTATE-ME 90°' });
+    expect(screen.getByText('当前 0°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 90°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 180°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 270°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 0°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 90°')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '关闭' }));
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+    expect(screen.getByText('当前 0°')).toBeTruthy();
+  });
 });
 
 describe('图片识别区域', () => {
@@ -182,13 +375,104 @@ describe('图片识别区域', () => {
 });
 
 describe('逐行预览', () => {
+  it('屏幕预览和打印页使用同一个缩小后字号', () => {
+    const label = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      sizePresetId: 'large',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
+    });
+    label.style.fontSizePt = 48;
+    const previewHtml = renderToStaticMarkup(<LabelPreview
+      label={label}
+      preset={defaultSizePresets[0]}
+      activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
+      onChange={() => undefined}
+    />);
+    const group = createPrintPlan([label], defaultSizePresets).groups[0];
+    const printHtml = renderToStaticMarkup(<PrintPages group={group} />);
+
+    expect(previewHtml).toContain('font-size:49.33333333333333px');
+    expect(previewHtml).not.toContain('font-size:64px');
+    expect(printHtml).toContain('font-size:37pt');
+    expect(printHtml).not.toContain('font-size:48pt');
+  });
+
+  it('屏幕预览和打印页分别渲染每行解析后的字号', () => {
+    const label = createLabel({
+      content: 'MMMM\nI',
+      quantity: 1,
+      source: 'manual',
+      sizePresetId: 'large',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 10, widthMm: 50, heightMm: 40 },
+    });
+    label.style.fontSizePt = 48;
+    label.textLines[0].placement.yPercent = 22;
+    label.textLines[1].placement.yPercent = 72;
+    const previewHtml = renderToStaticMarkup(<LabelPreview
+      label={label}
+      preset={defaultSizePresets[0]}
+      activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
+      onChange={() => undefined}
+    />);
+    const printHtml = renderToStaticMarkup(<PrintPages group={createPrintPlan([label], defaultSizePresets).groups[0]} />);
+
+    expect(previewHtml).toContain('font-size:49.33333333333333px');
+    expect(previewHtml).toContain('font-size:64px');
+    expect(printHtml).toContain('font-size:37pt');
+    expect(printHtml).toContain('font-size:48pt');
+  });
+
+  it('屏幕预览和打印页以相同比例缩小局部字符字号', () => {
+    const label = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      sizePresetId: 'large',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
+    });
+    label.style.fontSizePt = 48;
+    label.textStyleRanges = [{ start: 0, end: 1, style: { fontSizePt: 60 } }];
+    const previewHtml = renderToStaticMarkup(<LabelPreview
+      label={label}
+      preset={defaultSizePresets[0]}
+      activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
+      onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
+      onChange={() => undefined}
+    />);
+    const printHtml = renderToStaticMarkup(<PrintPages group={createPrintPlan([label], defaultSizePresets).groups[0]} />);
+
+    expect(previewHtml).toContain('font-size:56.666666666666664px');
+    expect(previewHtml).not.toContain('font-size:80px');
+    expect(printHtml).toContain('font-size:42.5pt');
+    expect(printHtml).not.toContain('font-size:60pt');
+  });
+
   it('每一行都渲染成独立可拖动对象', () => {
     const label = createLabel({ content: 'FY-01\nMADE IN CHINA', quantity: 1, source: 'manual', needsReview: false });
     const html = renderToStaticMarkup(<LabelPreview
       label={label}
       preset={defaultSizePresets[0]}
       activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
       onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
       onChange={() => undefined}
     />);
 
@@ -212,11 +496,14 @@ describe('逐行预览', () => {
       label={label}
       preset={preset}
       activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
       onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
       onChange={() => undefined}
     />);
 
-    expect(html).toContain('font-size:16px');
+    expect(html).toContain('font-size:14.666666666666666px');
     expect(html).toContain('文字行发生重叠');
   });
 
@@ -226,7 +513,10 @@ describe('逐行预览', () => {
       label={label}
       preset={defaultSizePresets[0]}
       activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
       onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
+      onClearLineSelection={() => undefined}
       onChange={() => undefined}
     />);
 
@@ -309,7 +599,9 @@ describe('右侧样式设置', () => {
     const html = renderToStaticMarkup(<LabelEditor
       label={label}
       activeLineId={label.textLines[0].id}
+      selectedLineIds={[label.textLines[0].id]}
       onActiveLineChange={() => undefined}
+      onSelectLine={() => undefined}
       onChange={() => undefined}
       onPrintPreview={() => undefined}
       reviewErrors={[]}

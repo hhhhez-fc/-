@@ -4,6 +4,7 @@ import { createLabel, defaultSizeTypeForBusiness, type LabelPurpose } from './do
 import { recoverDraft, saveDraftSafely } from './domain/storage';
 import LabelEditor from './features/LabelEditor';
 import LabelList from './features/LabelList';
+import SourceHistory from './features/SourceHistory';
 import LabelPreview from './features/LabelPreview';
 import SizeStylePanel from './features/SizeStylePanel';
 import ExcelImporter from './features/ExcelImporter';
@@ -22,6 +23,8 @@ import {
 } from './domain/workspaceLayout';
 import WorkspacePanel from './features/WorkspacePanel';
 import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSizePreview';
+import { hasSameSizePresetSnapshot, restoreRecentLabel, type RecentLabelEntry } from './domain/history';
+import { nextPrintRotation, type PrintRotation } from './domain/printRotation';
 
 interface AppProps {
   initialState?: DraftState;
@@ -40,7 +43,9 @@ export default function App({ initialState }: AppProps) {
   }>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
+  const [printRotations, setPrintRotations] = useState<Record<string, PrintRotation>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const [selectedLineIds, setSelectedLineIds] = useState<string[]>([]);
   const [fontSizePreview, setFontSizePreview] = useState<null | { labelId: string; choice: FontSizeChoice }>(null);
   const [panelDropTarget, setPanelDropTarget] = useState<WorkspacePanelDropTarget | null>(null);
   const saveFailureRef = useRef(false);
@@ -59,11 +64,20 @@ export default function App({ initialState }: AppProps) {
     : activeLabel;
   const printPlan = useMemo(() => createPrintPlan(state.labels, state.sizePresets), [state.labels, state.sizePresets]);
   const activeReviewErrors = activeLabel && activePreset
-    ? [...validateSizePreset(activePreset), ...validateLabelForPrint({ ...activeLabel, needsReview: false }, activePreset)]
+    ? [...validateSizePreset(activePreset), ...validateLabelForPrint(activeLabel, activePreset)]
     : [];
   const resolvedActiveLineId = activeLabel?.textLines.some((line) => line.id === activeLineId)
     ? activeLineId
     : activeLabel?.textLines[0]?.id ?? null;
+  const activeTextLineIds = activeLabel?.textLines.map((line) => line.id).join(',') ?? '';
+
+  useEffect(() => {
+    const availableIds = new Set(activeLabel?.textLines.map((line) => line.id) ?? []);
+    setSelectedLineIds((current) => {
+      const next = current.filter((id) => availableIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [activeLabel?.id, activeTextLineIds]);
 
   useEffect(() => {
     document.title = '唛头打印工作台';
@@ -118,25 +132,83 @@ export default function App({ initialState }: AppProps) {
       contentType: 'text',
       sizeType,
       sizePresetId: defaultNewLabelPreset.id,
-      needsReview: true,
-      reviewReason: '请填写唛头内容并完成校对',
+      needsReview: false,
     });
+    clearLineSelection();
+    setActiveLineId(null);
     dispatch({ type: 'add-label', label });
     setStatus('已新增一条手动唛头');
   };
 
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
-  const closePrintDialog = useCallback(() => setPrintDialogOpen(false), []);
+  const closePrintDialog = useCallback(() => {
+    setPrintDialogOpen(false);
+    setPrintRotations({});
+  }, []);
+  const rotatePrintedLabel = useCallback((id: string) => {
+    setPrintRotations((current) => ({
+      ...current,
+      [id]: nextPrintRotation(current[id] ?? 0),
+    }));
+  }, []);
+  const selectLine = useCallback((id: string) => {
+    setActiveLineId(id);
+    setSelectedLineIds((current) => current.includes(id) ? current : [...current, id]);
+  }, []);
+  const activateLine = useCallback((id: string) => setActiveLineId(id), []);
+  const clearLineSelection = useCallback(() => setSelectedLineIds([]), []);
+  const activateLabel = useCallback((id: string) => {
+    setSelectedLineIds([]);
+    setActiveLineId(null);
+    dispatch({ type: 'set-active-label', id });
+  }, []);
+  const duplicateLabel = useCallback((id: string) => {
+    clearLineSelection();
+    setActiveLineId(null);
+    dispatch({ type: 'duplicate-label', id });
+  }, [clearLineSelection]);
   const deleteLabel = (id: string) => {
+    if (id === state.activeLabelId) clearLineSelection();
     dispatch({ type: 'delete-label', id });
     setStatus('已删除一条唛头');
   };
 
+  const restoreHistoryEntry = (entry: RecentLabelEntry) => {
+    const restored = restoreRecentLabel(entry);
+    const existingPreset = state.sizePresets.find((candidate) => candidate.id === restored.preset.id);
+    const presetMatchesSnapshot = Boolean(
+      existingPreset && hasSameSizePresetSnapshot(existingPreset, restored.preset),
+    );
+    if (existingPreset && !presetMatchesSnapshot) {
+      restored.preset.id = crypto.randomUUID();
+      restored.label.sizePresetId = restored.preset.id;
+    }
+    if (!presetMatchesSnapshot) {
+      dispatch({ type: 'add-size-preset', preset: restored.preset });
+    }
+    clearLineSelection();
+    setActiveLineId(null);
+    dispatch({ type: 'add-label', label: restored.label });
+    setStatus('已从使用记录新增一条唛头');
+  };
+
   const selectedCount = state.selectedLabelIds.length;
   const allSelected = state.labels.length > 0 && selectedCount === state.labels.length;
+  const recordPrintableLabels = (ids?: string[]) => {
+    const requestedIds = ids ? new Set(ids) : null;
+    const recordedIds = new Set<string>();
+    const entries = printPlan.groups.flatMap((group) => group.pages).flatMap(({ label, preset }) => {
+      if (recordedIds.has(label.id) || (requestedIds && !requestedIds.has(label.id))) return [];
+      recordedIds.add(label.id);
+      return [{ label, preset }];
+    });
+    if (entries.length > 0) {
+      dispatch({ type: 'record-recent-labels', entries, previewedAt: Date.now() });
+    }
+  };
   const openActivePrintPreview = () => {
     if (!activeLabel || activeReviewErrors.length > 0) return;
-    if (activeLabel.needsReview) dispatch({ type: 'mark-reviewed', id: activeLabel.id });
+    recordPrintableLabels([activeLabel.id]);
     setPrintDialogOpen(true);
   };
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
@@ -180,6 +252,8 @@ export default function App({ initialState }: AppProps) {
             if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
               dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
             }
+            clearLineSelection();
+            setActiveLineId(null);
             dispatch({ type: 'import-labels', labels });
           }}
           onStatus={setStatus}
@@ -191,6 +265,8 @@ export default function App({ initialState }: AppProps) {
             if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
               dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
             }
+            clearLineSelection();
+            setActiveLineId(null);
             dispatch({ type: 'import-labels', labels });
           }}
           onStatus={setStatus}
@@ -205,32 +281,24 @@ export default function App({ initialState }: AppProps) {
         <span>Excel、图片识别和草稿保存都在当前浏览器中完成。</span>
       </aside>
 
-      <section className="source-history" aria-labelledby="source-history-title">
-        <div>
-          <h3 id="source-history-title">使用过的唛头</h3>
-          <p>最近使用的唛头会保存在录入来源中。</p>
-        </div>
-        <div className="source-history-empty">
-          <strong>暂时没有使用记录</strong>
-          <span>完成打印后，这里会显示最近使用的唛头。</span>
-        </div>
-      </section>
+      <SourceHistory entries={state.recentLabels} onRestore={restoreHistoryEntry} />
     </>,
     records: <>
-      <div className="panel-heading panel-drag-handle records-heading" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动校对清单板块；左右方向键换位">
+      <div className="panel-heading panel-drag-handle records-heading" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动唛头清单板块；左右方向键换位">
         <span className="step-number">02</span>
         <div>
-          <h2 id="records-title">校对清单</h2>
-          <p>{state.labels.length} 条记录 · {state.labels.filter((label) => label.needsReview).length} 条待校对</p>
+          <h2 id="records-title">唛头清单</h2>
+          <p>{state.labels.length} 条记录</p>
         </div>
       </div>
       <LabelList
         labels={state.labels}
         activeLabelId={state.activeLabelId}
         selectedLabelIds={state.selectedLabelIds}
-        onActivate={(id) => dispatch({ type: 'set-active-label', id })}
+        onActivate={activateLabel}
         onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
-        onDuplicate={(id) => dispatch({ type: 'duplicate-label', id })}
+        onQuantityChange={(id, quantity) => dispatch({ type: 'update-label', id, patch: { quantity } })}
+        onDuplicate={duplicateLabel}
         onDelete={deleteLabel}
       />
       {state.labels.length > 0 && (
@@ -255,6 +323,8 @@ export default function App({ initialState }: AppProps) {
                 message: '删除后无法撤销，未选中的记录不受影响。',
                 confirmLabel: '批量删除',
                 action: () => {
+                  clearLineSelection();
+                  setActiveLineId(null);
                   state.selectedLabelIds.forEach((id) => dispatch({ type: 'delete-label', id }));
                   setStatus(`已删除 ${selectedCount} 条唛头`);
                 },
@@ -269,11 +339,13 @@ export default function App({ initialState }: AppProps) {
         <LabelEditor
           label={activeLabel}
           activeLineId={resolvedActiveLineId}
-          onActiveLineChange={setActiveLineId}
+          selectedLineIds={selectedLineIds}
+          onActiveLineChange={activateLine}
+          onSelectLine={selectLine}
           onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
           onPrintPreview={openActivePrintPreview}
           reviewErrors={activeReviewErrors}
-          onDuplicate={() => dispatch({ type: 'duplicate-label', id: activeLabel.id })}
+          onDuplicate={() => duplicateLabel(activeLabel.id)}
           onDelete={() => deleteLabel(activeLabel.id)}
         />
       )}
@@ -306,7 +378,10 @@ export default function App({ initialState }: AppProps) {
             label={previewLabel ?? activeLabel}
             preset={activePreset}
             activeLineId={resolvedActiveLineId}
-            onActiveLineChange={setActiveLineId}
+            selectedLineIds={selectedLineIds}
+            onActiveLineChange={activateLine}
+            onSelectLine={selectLine}
+            onClearLineSelection={clearLineSelection}
             onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
           />
         </>
@@ -344,6 +419,8 @@ export default function App({ initialState }: AppProps) {
                 message: `将删除 ${state.labels.length} 条唛头并新建一条空白唛头；最近打印尺寸会保留。此操作无法撤销。`,
                 confirmLabel: '清空草稿',
                 action: () => {
+                  clearLineSelection();
+                  setActiveLineId(null);
                   dispatch({ type: 'clear-draft' });
                   setStatus('草稿已清空');
                 },
@@ -360,7 +437,10 @@ export default function App({ initialState }: AppProps) {
               setStatus('已恢复默认工作区布局');
             }}
           >恢复默认布局</button>
-          <button className="button button-print" type="button" disabled={state.labels.length === 0} onClick={() => setPrintDialogOpen(true)}>
+          <button className="button button-print" type="button" disabled={state.labels.length === 0} onClick={() => {
+            recordPrintableLabels();
+            setPrintDialogOpen(true);
+          }}>
             检查并打印
           </button>
         </div>
@@ -406,9 +486,11 @@ export default function App({ initialState }: AppProps) {
     <PrintReviewDialog
       open={printDialogOpen}
       plan={printPlan}
+      rotations={printRotations}
+      onRotateLabel={rotatePrintedLabel}
       onClose={closePrintDialog}
       onEditLabel={(id) => {
-        dispatch({ type: 'set-active-label', id });
+        activateLabel(id);
         closePrintDialog();
       }}
       onPrintGroup={(group) => {
@@ -417,7 +499,7 @@ export default function App({ initialState }: AppProps) {
         setStatus(`正在打开 ${group.sizeLabel} 的打印设置；系统打印份数请保持 1`);
       }}
     />
-    <PrintPages group={activePrintGroup} />
+    <PrintPages group={activePrintGroup} rotations={printRotations} />
     </>
   );
 }

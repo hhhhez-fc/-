@@ -8,22 +8,20 @@ import {
   type PointerDragStart,
   type TextResizeHandle,
 } from '../domain/pointerDrag';
-import { contentWithUpdatedTextLine, updateTextLine } from '../domain/textLines';
-import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset, TextPlacement } from '../domain/labels';
+import { contentWithUpdatedTextLine, moveSelectedTextLines, updateTextLine } from '../domain/textLines';
+import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset } from '../domain/labels';
+import { rotationTransform } from '../domain/printRotation';
 import { StyledTextLine } from './StyledText';
 
 interface LabelPreviewProps {
   label: LabelRecord;
   preset: SizePreset;
   activeLineId: string | null;
+  selectedLineIds: string[];
   onActiveLineChange: (id: string) => void;
+  onSelectLine: (id: string) => void;
+  onClearLineSelection: () => void;
   onChange: (patch: Partial<LabelRecord>) => void;
-}
-
-function placementTransform(placement: TextPlacement): string {
-  const x = placement.horizontalSnap === 'left' ? '0%' : placement.horizontalSnap === 'right' ? '-100%' : '-50%';
-  const y = placement.verticalSnap === 'top' ? '0%' : placement.verticalSnap === 'bottom' ? '-100%' : '-50%';
-  return `translate(${x}, ${y})`;
 }
 
 interface PrintAreaDragStart {
@@ -57,10 +55,10 @@ const resizeHandles: Array<{ id: PrintAreaResizeHandle; label: string }> = [
 
 const textResizeHandles: TextResizeHandle[] = ['nw', 'ne', 'se', 'sw'];
 
-export default function LabelPreview({ label, preset, activeLineId, onActiveLineChange, onChange }: LabelPreviewProps) {
+export default function LabelPreview({ label, preset, activeLineId, selectedLineIds, onActiveLineChange, onSelectLine, onClearLineSelection, onChange }: LabelPreviewProps) {
   const paperRef = useRef<HTMLDivElement>(null);
   const contentLayerRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<(PointerDragStart & { lineId: string }) | null>(null);
+  const dragStartRef = useRef<(PointerDragStart & { lineId: string; lines: LabelTextLine[]; selectedIds: string[]; moved: boolean }) | null>(null);
   const textResizeRef = useRef<TextResizeStart | null>(null);
   const printAreaDragRef = useRef<PrintAreaDragStart | null>(null);
   const printAreaHandleMovedRef = useRef(false);
@@ -121,9 +119,9 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     printAreaDragRef.current = null;
     setIsAreaDragging(false);
-    window.setTimeout(() => { printAreaHandleMovedRef.current = false; }, 0);
   };
   const movePrintAreaWithKeyboard = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return;
     const amount = event.shiftKey ? 2 : 0.5;
     const movement: Record<string, [number, number]> = {
       ArrowLeft: [-amount, 0], ArrowRight: [amount, 0], ArrowUp: [0, -amount], ArrowDown: [0, amount],
@@ -153,10 +151,16 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     const bounds = contentLayerRef.current?.getBoundingClientRect();
     const start = dragStartRef.current;
     if (!bounds || !start || start.lineId !== line.id) return;
-    const placement = resolvePointerDragUpdate(start, event, bounds);
+    const placement = resolvePointerDragUpdate(start, event, bounds, start.moved);
     if (!placement) return;
+    start.moved = true;
     setDraggingId(line.id);
-    patchLine(line, { placement });
+    onChange({ textLines: moveSelectedTextLines(
+      start.lines,
+      start.selectedIds,
+      placement.xPercent - start.placement.xPercent,
+      placement.yPercent - start.placement.yPercent,
+    ) });
   };
   const handleKeyDown = (line: LabelTextLine, event: KeyboardEvent<HTMLButtonElement>) => {
     const amount = event.shiftKey ? 5 : 1;
@@ -166,12 +170,9 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     const delta = movement[event.key];
     if (!delta) return;
     event.preventDefault();
-    patchLine(line, { placement: {
-      xPercent: Math.max(0, Math.min(100, line.placement.xPercent + delta[0])),
-      yPercent: Math.max(0, Math.min(100, line.placement.yPercent + delta[1])),
-      horizontalSnap: delta[0] ? 'free' : line.placement.horizontalSnap,
-      verticalSnap: delta[1] ? 'free' : line.placement.verticalSnap,
-    } });
+    event.stopPropagation();
+    const ids = selectedLineIds.includes(line.id) ? selectedLineIds : [line.id];
+    onChange({ textLines: moveSelectedTextLines(label.textLines, ids, delta[0], delta[1]) });
   };
   const resizeTextFromPointer = (line: LabelTextLine, event: PointerEvent<HTMLSpanElement>) => {
     const start = textResizeRef.current;
@@ -196,7 +197,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
     event.preventDefault();
     event.stopPropagation();
     const amount = event.shiftKey ? 5 : 1;
-    const current = line.style.fontSizePt ?? fontSize;
+    const current = line.style.fontSizePt ?? label.style.fontSizePt;
     patchLine(line, { style: { ...line.style, fontSizePt: Math.max(8, Math.min(120, current + direction * amount)) } });
   };
   const startEditing = (line: LabelTextLine) => {
@@ -245,14 +246,20 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
         }}
         onKeyDown={movePrintAreaWithKeyboard}
         onPointerDown={(event) => {
+          printAreaHandleMovedRef.current = false;
           event.currentTarget.setPointerCapture(event.pointerId);
           printAreaDragRef.current = { clientX: event.clientX, clientY: event.clientY, area: printArea, mode: 'move' };
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget && !printAreaHandleMovedRef.current) onClearLineSelection();
         }}
         onPointerMove={updatePrintAreaFromPointer}
         onPointerUp={finishPrintAreaDrag}
         onPointerCancel={() => { printAreaDragRef.current = null; setIsAreaDragging(false); }}
       >
-        <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }}>
+        <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }} onClick={(event) => {
+          if (event.target === event.currentTarget && !printAreaHandleMovedRef.current) onClearLineSelection();
+        }}>
         {draggingId && <><i className="snap-guide guide-x" /><i className="snap-guide guide-y" /></>}
         {label.contentType === 'image' && label.imageFallback ? <img src={label.imageFallback} alt="待打印唛头" /> : showDirectEntry ? (
           <textarea
@@ -269,17 +276,20 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
           />
         ) :
           label.textLines.map((line, index) => {
+            const isSelected = selectedLineIds.includes(line.id);
             const isActive = line.id === activeLine?.id;
+            const lineLayout = layout?.lineLayouts?.[line.id];
+            const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
             const frameStyle: CSSProperties = {
               left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
-              transform: placementTransform(line.placement),
+              transform: rotationTransform(line.placement, 0),
             };
             const textStyle: CSSProperties = {
               textAlign: label.style.horizontalAlign,
               whiteSpace: 'nowrap',
               writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
               fontFamily: line.style.fontFamily,
-              fontSize: line.style.fontSizePt ? `${line.style.fontSizePt * (96 / 72) * previewScale}px` : undefined,
+              fontSize: `${renderedFontSize * (96 / 72) * previewScale}px`,
               fontWeight: line.style.fontWeight,
               fontStyle: line.style.italic ? 'italic' : undefined,
               textDecoration: line.style.underline ? 'underline' : undefined,
@@ -300,22 +310,25 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
                   onClick={(event) => event.stopPropagation()}
                 /></div>;
             }
-            return <div key={line.id} className={`text-line-frame ${isActive ? 'is-active-line' : ''}`} style={frameStyle}>
+            return <div key={line.id} className={`text-line-frame ${isActive ? 'is-active-line' : ''} ${isSelected ? 'is-selected-line' : ''}`} style={frameStyle}>
               <button type="button"
                 className={`draggable-text draggable-line ${draggingId === line.id ? 'is-dragging' : ''}`}
-                style={textStyle} aria-pressed={isActive}
+                style={textStyle} aria-pressed={isSelected}
                 aria-label={`拖动第 ${index + 1} 行：${line.text || '空行'}，当前位置：${describePlacement(line.placement)}。方向键微调，Shift 加速。`}
-                onClick={() => onActiveLineChange(line.id)}
+                onClick={(event) => { event.stopPropagation(); onSelectLine(line.id); }}
                 onDoubleClick={() => startEditing(line)}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   event.currentTarget.setPointerCapture(event.pointerId);
-                  onActiveLineChange(line.id);
+                  onSelectLine(line.id);
                   dragStartRef.current = {
                     lineId: line.id,
                     clientX: event.clientX,
                     clientY: event.clientY,
                     placement: line.placement,
+                    lines: label.textLines,
+                    selectedIds: selectedLineIds.includes(line.id) ? selectedLineIds : [...selectedLineIds, line.id],
+                    moved: false,
                   };
                 }}
                 onPointerMove={(event) => { if (dragStartRef.current?.lineId === line.id) moveFromPointer(line, event); }}
@@ -325,7 +338,13 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
                   dragStartRef.current = null;
                 }}
                 onPointerCancel={() => { setDraggingId(null); dragStartRef.current = null; }} onKeyDown={(event) => handleKeyDown(line, event)}>
-                <StyledTextLine label={label} line={line} lineIndex={index} previewScale={previewScale} />
+                <StyledTextLine
+                  label={label}
+                  line={line}
+                  lineIndex={index}
+                  previewScale={previewScale}
+                  fontScale={lineLayout?.fontScale}
+                />
               </button>
               {isActive && textResizeHandles.map((handle) => <span
                 role="slider"
@@ -335,7 +354,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
                 aria-label={`从${handle === 'nw' ? '左上' : handle === 'ne' ? '右上' : handle === 'se' ? '右下' : '左下'}调整第 ${index + 1} 行文字大小；方向键调整字号，Shift 加速`}
                 aria-valuemin={8}
                 aria-valuemax={120}
-                aria-valuenow={line.style.fontSizePt ?? fontSize}
+                aria-valuenow={line.style.fontSizePt ?? label.style.fontSizePt}
                 onKeyDown={(event) => resizeTextWithKeyboard(line, event)}
                 onPointerDown={(event) => {
                   event.preventDefault();
@@ -346,7 +365,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
                   textResizeRef.current = {
                     clientX: event.clientX,
                     clientY: event.clientY,
-                    fontSizePt: line.style.fontSizePt ?? fontSize,
+                    fontSizePt: line.style.fontSizePt ?? label.style.fontSizePt,
                     width: bounds.width,
                     height: bounds.height,
                     lineId: line.id,
@@ -390,7 +409,7 @@ export default function LabelPreview({ label, preset, activeLineId, onActiveLine
       </div>
     </div>
     <div className={`layout-status ${layout && !layout.ok ? 'is-error' : ''}`} role="status">
-      <span>{layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? fontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}</span>
+      <span>{layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? label.style.fontSizePt} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}</span>
       {activeLine && <button
         className="layout-status-action"
         type="button"

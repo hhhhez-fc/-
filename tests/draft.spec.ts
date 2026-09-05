@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLabel, defaultStyle } from '../src/domain/labels';
 import { createInitialDraft, draftReducer, type DraftState } from '../src/domain/draft';
+import type { RecentLabelInput } from '../src/domain/history';
 import { loadDraft, recoverDraft, saveDraft, saveDraftSafely } from '../src/domain/storage';
+
+const historyInput = (content: string): RecentLabelInput => ({
+  label: createLabel({
+    content,
+    quantity: 1,
+    source: 'manual',
+    sizePresetId: createInitialDraft().sizePresets[0].id,
+    needsReview: false,
+  }),
+  preset: { ...createInitialDraft().sizePresets[0] },
+});
 
 describe('草稿状态', () => {
   it('新增记录后将其设为当前记录并保留在列表中', () => {
@@ -38,13 +50,14 @@ describe('草稿状态', () => {
     expect(next.labels.map((label) => label.content)).toEqual(['A-UPDATED', 'B']);
   });
 
-  it('已校对记录修改内容或数量后会重新进入待校对状态', () => {
+  it('修改正文和数量不再新增旧草稿校对原因', () => {
     const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false });
     const state = { ...createInitialDraft(), labels: [label] };
 
     const next = draftReducer(state, { type: 'update-label', id: label.id, patch: { quantity: 3 } });
 
-    expect(next.labels[0]).toMatchObject({ quantity: 3, needsReview: true, reviewReason: '内容或数量已修改，请重新校对' });
+    expect(next.labels[0]).toMatchObject({ quantity: 3, needsReview: false });
+    expect(next.labels[0].reviewReason).toBeUndefined();
   });
 
   it('业务与用途选择作为后续新增记录的默认上下文保存', () => {
@@ -90,6 +103,18 @@ describe('草稿状态', () => {
 
     expect(cleared.lastPrintedSize).toEqual({ widthMm: 92, heightMm: 58 });
     expect(activePreset).toMatchObject({ widthMm: 92, heightMm: 58 });
+  });
+
+  it('清空草稿保留最近预览历史', () => {
+    const state = draftReducer(createInitialDraft(), {
+      type: 'record-recent-labels',
+      entries: [historyInput('FY-01')],
+      previewedAt: 1000,
+    });
+
+    expect(state.recentLabels).toHaveLength(1);
+    expect(draftReducer(state, { type: 'clear-draft' }).recentLabels).toEqual(state.recentLabels);
+    expect(draftReducer(state, { type: 'clear-draft' }).recentLabels).not.toBe(state.recentLabels);
   });
 
   it('可收起板块并保留原有尺寸', () => {
@@ -220,7 +245,7 @@ describe('草稿状态', () => {
     const next = draftReducer(state, { type: 'duplicate-label', id: label.id });
 
     expect(next.labels).toHaveLength(2);
-    expect(next.labels[1]).toMatchObject({ content: 'A', quantity: 2, needsReview: true });
+    expect(next.labels[1]).toMatchObject({ content: 'A', quantity: 2, needsReview: false });
     expect(next.labels[1].id).not.toBe(label.id);
     expect(next.activeLabelId).toBe(next.labels[1].id);
   });
@@ -243,24 +268,6 @@ describe('草稿状态', () => {
     expect(draftReducer(inUse, { type: 'remove-size-preset', id: 'large' })).toBe(inUse);
   });
 
-  it('校对确认会清除待校对原因', () => {
-    const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: true, reviewReason: '待确认' });
-    const state = { ...createInitialDraft(), labels: [label] };
-
-    const next = draftReducer(state, { type: 'mark-reviewed', id: label.id });
-
-    expect(next.labels[0]).toMatchObject({ needsReview: false });
-    expect(next.labels[0].reviewReason).toBeUndefined();
-  });
-
-  it('内容或数量无效时不能确认校对完成', () => {
-    const label = createLabel({ content: '', quantity: 0, source: 'manual', needsReview: true });
-    const state = { ...createInitialDraft(), labels: [label] };
-
-    const next = draftReducer(state, { type: 'mark-reviewed', id: label.id });
-
-    expect(next).toBe(state);
-  });
 });
 
 describe('本地草稿存储', () => {
@@ -285,6 +292,19 @@ describe('本地草稿存储', () => {
     const storage = { getItem: () => JSON.stringify(oldDraft) };
 
     expect(loadDraft(storage)).toMatchObject({ selectedLabelIds: [], business: '' });
+  });
+
+  it('读取旧草稿时缺失的最近预览历史补为空列表', () => {
+    const oldDraft = createInitialDraft() as unknown as Record<string, unknown>;
+    delete oldDraft.recentLabels;
+
+    expect(loadDraft({ getItem: () => JSON.stringify(oldDraft) })?.recentLabels).toEqual([]);
+  });
+
+  it('损坏历史条目在读取草稿时被过滤', () => {
+    const stored = { ...createInitialDraft(), recentLabels: [{ bad: true }] };
+
+    expect(loadDraft({ getItem: () => JSON.stringify(stored) })?.recentLabels).toEqual([]);
   });
 
   it('读取草稿时丢弃超出可打印范围的上次打印尺寸', () => {

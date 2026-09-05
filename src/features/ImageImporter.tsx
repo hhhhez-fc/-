@@ -146,11 +146,10 @@ export default function ImageImporter({ sizePresetId, purpose, onImport, onStatu
           style: {},
           textOrientation: 'horizontal',
         })),
-        needsReview: true,
-        reviewReason: 'OCR 结果需要人工校对',
+        needsReview: false,
       })]);
       setImages((current) => current.filter((item) => item.id !== image.id));
-      onStatus(`图片文字已识别，请校对：${image.file.name}`);
+      onStatus(`图片文字已识别：${image.file.name}`);
     } catch (error) {
       if (controllers.current.get(image.id) !== controller) return;
       if (error instanceof DOMException && error.name === 'AbortError') {

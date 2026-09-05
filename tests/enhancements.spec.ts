@@ -3,7 +3,7 @@ import {
   extractRegionText,
   formatCellRange,
   normalizeCellRange,
-  regionsToLabels,
+  regionsToLabel,
   type CellRange,
   type ParsedSheet,
 } from '../src/domain/importing';
@@ -39,16 +39,22 @@ describe('Excel 多区域框选', () => {
     expect(extractRegionText(sheet, range)).toBe('FY-01\nBLUE\n2\nMADE IN CHINA');
   });
 
-  it('多个区域分别生成多条待校对唛头', () => {
-    const labels = regionsToLabels(sheet, [
+  it('多个框选区域按创建顺序合并成一条唛头', () => {
+    const label = regionsToLabel(sheet, [
       { startRow: 1, startCol: 0, endRow: 2, endCol: 1 },
       { startRow: 3, startCol: 0, endRow: 3, endCol: 1 },
     ], 'small');
 
-    expect(labels.map((label) => ({ content: label.content, quantity: label.quantity, review: label.needsReview }))).toEqual([
-      { content: 'FY-01\nBLUE\nMADE IN CHINA', quantity: 1, review: true },
-      { content: 'FY-02\nRED', quantity: 1, review: true },
-    ]);
+    expect(label).toMatchObject({
+      content: 'FY-01\nBLUE\nMADE IN CHINA\nFY-02\nRED',
+      quantity: 1,
+      sides: 1,
+      source: 'excel',
+    });
+  });
+
+  it('全部框选区域为空时不创建唛头', () => {
+    expect(regionsToLabel(sheet, [{ startRow: 99, startCol: 9, endRow: 100, endCol: 10 }], 'small')).toBeNull();
   });
 });
 

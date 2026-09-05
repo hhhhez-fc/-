@@ -10,6 +10,7 @@ import {
 } from '../src/domain/labels';
 import { parseQuantity } from '../src/domain/quantity';
 import { getPreviewScale, solveLabelTextLayout, solveTextLayout, validateLabelForPrint } from '../src/domain/layout';
+import { rotationSwapsAxes } from '../src/domain/printRotation';
 
 describe('Excel 表头识别', () => {
   it('规范化后识别含“唛头”与“数量/件数”的表头', () => {
@@ -20,11 +21,11 @@ describe('Excel 表头识别', () => {
     });
   });
 
-  it('将表格行转换为待校对的唛头记录，并保持有效数量', () => {
+  it('将表格行转换为唛头记录，无效数量保留为不可打印的零值', () => {
     const labels = rowsToLabels(['唛头', '数量'], [['箱唛 A', '3'], ['箱唛 B', '错误']], 'small');
     expect(labels.map(({ content, quantity, needsReview }) => ({ content, quantity, needsReview }))).toEqual([
       { content: '箱唛 A', quantity: 3, needsReview: false },
-      { content: '箱唛 B', quantity: 1, needsReview: true },
+      { content: '箱唛 B', quantity: 0, needsReview: false },
     ]);
   });
 });
@@ -37,24 +38,30 @@ describe('业务默认规格', () => {
 });
 
 describe('打印数量校验', () => {
-  it.each(['0', '-3', '1.5', 'abc', ''])('将非法数量 %j 标记为需要校对', (input) => {
-    expect(parseQuantity(input)).toEqual({ quantity: 1, needsReview: true });
+  it('人工校对状态不阻止合法唛头打印', () => {
+    const label = createLabel({ content: 'FY-01', quantity: 1, source: 'manual', needsReview: true });
+
+    expect(validateLabelForPrint(label, defaultSizePresets[0])).not.toContain('该唛头尚未完成校对');
+  });
+
+  it.each(['0', '-3', '1.5', 'abc', ''])('将非法数量 %j 保留为不可打印的零值', (input) => {
+    expect(parseQuantity(input)).toEqual({ quantity: 0 });
   });
 
   it('接受正整数数量', () => {
-    expect(parseQuantity('12')).toEqual({ quantity: 12, needsReview: false });
+    expect(parseQuantity('12')).toEqual({ quantity: 12 });
   });
 
-  it('将超过单条打印上限的数量标记为需要校对', () => {
-    expect(parseQuantity('1001')).toEqual({ quantity: 1, needsReview: true });
+  it('将超过单条打印上限的数量保留为不可打印的零值', () => {
+    expect(parseQuantity('1001')).toEqual({ quantity: 0 });
   });
 
-  it('阻止手动输入超过单条上限的基础数量', () => {
+  it('阻止手动输入超过单条上限的打印数量', () => {
     const label = createLabel({ content: 'A', quantity: 1001, source: 'manual', needsReview: false });
-    expect(validateLabelForPrint(label, defaultSizePresets[1])).toContain('基础数量不能超过 1000');
+    expect(validateLabelForPrint(label, defaultSizePresets[1])).toContain('打印数量不能超过 1000');
   });
 
-  it('将基础数量与张贴面数相乘得到最终打印份数', () => {
+  it('将列表打印数量与张贴面数相乘得到最终打印份数', () => {
     const label = createLabel({
       content: 'FY-01',
       contentType: 'text',
@@ -100,7 +107,198 @@ describe('唛头排版', () => {
     expect(getPreviewScale(260, 130)).toBeCloseTo(0.5292, 3);
   });
 
-  it('移动文字只改变位置校验，不改变用户设置的字号', () => {
+  it('短内容保留用户字号，长内容只缩小到最大可用字号', () => {
+    const short = createLabel({ content: 'FY', quantity: 1, source: 'manual', needsReview: false });
+    short.style.fontSizePt = 48;
+    const shortLayout = solveLabelTextLayout(short, defaultSizePresets[0]);
+
+    const long = createLabel({
+      content: 'LONG-SHIPPING-MARK-1234',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    });
+    long.style.fontSizePt = 48;
+    const longLayout = solveLabelTextLayout(long, defaultSizePresets[1]);
+
+    expect(shortLayout.ok && shortLayout.lineLayouts[short.textLines[0].id].fontSizePt).toBe(48);
+    expect(longLayout.ok).toBe(true);
+    expect(longLayout.ok && longLayout.lineLayouts[long.textLines[0].id].fontSizePt).toBeLessThan(48);
+  });
+
+  it('局部字符字号按同一比例缩小', () => {
+    const label = createLabel({ content: 'LONG-LONG-LONG', quantity: 1, source: 'manual', needsReview: false });
+    label.style.fontSizePt = 40;
+    label.textStyleRanges = [{ start: 0, end: 4, style: { fontSizePt: 60 } }];
+
+    const result = solveLabelTextLayout(label, defaultSizePresets[1]);
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.lineLayouts[label.textLines[0].id]).toMatchObject({ fontSizePt: expect.any(Number) });
+    expect(result.ok && result.lineLayouts[label.textLines[0].id].fontScale).toBeLessThan(1);
+  });
+
+  it('全局粗体被文字行继承时会在边界处触发缩小', () => {
+    const plain = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    plain.style.fontSizePt = 38;
+    plain.style.fontWeight = 400;
+    const bold = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    bold.style.fontSizePt = 38;
+    bold.style.fontWeight = 700;
+
+    const plainResult = solveLabelTextLayout(plain, defaultSizePresets[0]);
+    const boldResult = solveLabelTextLayout(bold, defaultSizePresets[0]);
+
+    expect(plainResult.ok && plainResult.lineLayouts[plain.textLines[0].id].fontSizePt).toBe(38);
+    expect(boldResult.ok && boldResult.lineLayouts[bold.textLines[0].id].fontSizePt).toBeLessThan(38);
+  });
+
+  it('全局斜体被文字行继承时会在边界处触发缩小', () => {
+    const plain = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    plain.style.fontSizePt = 38;
+    plain.style.fontWeight = 400;
+    plain.style.italic = false;
+    const italic = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
+    });
+    italic.style.fontSizePt = 38;
+    italic.style.fontWeight = 400;
+    italic.style.italic = true;
+
+    const plainResult = solveLabelTextLayout(plain, defaultSizePresets[0]);
+    const italicResult = solveLabelTextLayout(italic, defaultSizePresets[0]);
+
+    expect(plainResult.ok && plainResult.lineLayouts[plain.textLines[0].id].fontSizePt).toBe(38);
+    expect(italicResult.ok && italicResult.lineLayouts[italic.textLines[0].id].fontSizePt).toBeLessThan(38);
+  });
+
+  it('旋转 90 或 270 度时交换文字的可用轴', () => {
+    expect([0, 90, 180, 270].map((rotation) => rotationSwapsAxes(rotation as 0 | 90 | 180 | 270)))
+      .toEqual([false, true, false, true]);
+  });
+
+  it('非居中锚点在 90 与 270 度旋转下使用相同的旋转边界', () => {
+    const label = createLabel({
+      content: 'MMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
+    });
+    label.style.fontSizePt = 48;
+    label.style.fontWeight = 400;
+    label.textLines[0].placement = {
+      xPercent: 25,
+      yPercent: 70,
+      horizontalSnap: 'free',
+      verticalSnap: 'free',
+    };
+
+    const clockwise = solveLabelTextLayout(label, defaultSizePresets[0], 90);
+    const counterClockwise = solveLabelTextLayout(label, defaultSizePresets[0], 270);
+
+    expect(clockwise.ok).toBe(true);
+    expect(counterClockwise.ok).toBe(true);
+    expect(clockwise.ok && clockwise.lineLayouts[label.textLines[0].id].fontSizePt).toBe(13);
+    expect(counterClockwise.ok && counterClockwise.lineLayouts[label.textLines[0].id])
+      .toEqual(clockwise.ok && clockwise.lineLayouts[label.textLines[0].id]);
+  });
+
+  it.each([90, 270] as const)('按实际 CSS 中心旋转包围盒阻止 %i° 的四边吸附溢出', (rotation) => {
+    const edgeCases = [
+      {
+        orientation: 'vertical' as const,
+        placement: { xPercent: 0, yPercent: 50, horizontalSnap: 'left' as const, verticalSnap: 'middle' as const },
+      },
+      {
+        orientation: 'vertical' as const,
+        placement: { xPercent: 100, yPercent: 50, horizontalSnap: 'right' as const, verticalSnap: 'middle' as const },
+      },
+      {
+        orientation: 'horizontal' as const,
+        placement: { xPercent: 50, yPercent: 0, horizontalSnap: 'center' as const, verticalSnap: 'top' as const },
+      },
+      {
+        orientation: 'horizontal' as const,
+        placement: { xPercent: 50, yPercent: 100, horizontalSnap: 'center' as const, verticalSnap: 'bottom' as const },
+      },
+    ];
+
+    const results = edgeCases.map(({ orientation, placement }) => {
+      const label = createLabel({ content: 'MMMM', quantity: 1, source: 'manual', needsReview: false });
+      label.textLines[0].textOrientation = orientation;
+      label.textLines[0].placement = placement;
+      return solveLabelTextLayout(label, defaultSizePresets[0], rotation);
+    });
+
+    const overflow = expect.objectContaining({
+      ok: false,
+      error: '内容在最小字号下仍无法完整显示',
+    });
+    expect(results).toEqual([overflow, overflow, overflow, overflow]);
+  });
+
+  it('最小字号仍无法容纳时保持打印阻断', () => {
+    const label = createLabel({
+      content: 'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    });
+    label.style.fontSizePt = 48;
+
+    const result = solveLabelTextLayout(label, defaultSizePresets[1]);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: '内容在最小字号下仍无法完整显示',
+      lineLayouts: {
+        [label.textLines[0].id]: { fontSizePt: defaultSizePresets[1].minFontSize },
+      },
+    });
+  });
+
+  it('任一行在最小字号仍失败时仍会返回所有非空行的尝试排版', () => {
+    const label = createLabel({
+      content: 'MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nI',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    });
+    label.style.fontSizePt = 48;
+
+    const result = solveLabelTextLayout(label, defaultSizePresets[1]);
+
+    expect(result.ok).toBe(false);
+    expect(result.lineLayouts).toMatchObject({
+      [label.textLines[0].id]: { fontSizePt: defaultSizePresets[1].minFontSize },
+      [label.textLines[1].id]: { fontSizePt: expect.any(Number) },
+    });
+  });
+
+  it('移动文字后只缩小渲染字号，不改变用户设置的上限', () => {
     const label = createLabel({
       content: 'FYF-TTT0103',
       quantity: 1,
@@ -119,8 +317,15 @@ describe('唛头排版', () => {
     };
     const moved = solveLabelTextLayout(label, preset);
 
-    expect(centered).toEqual({ ok: true, fontSize: 32, lines: ['FYF-TTT0103'] });
-    expect(moved).toEqual({ ok: false, error: '文字位置超出唛头范围', fontSize: 32 });
+    expect(centered).toMatchObject({
+      ok: true,
+      fontSize: 32,
+      lineLayouts: { [label.textLines[0].id]: { fontSizePt: 32, fontScale: 1 } },
+      lines: ['FYF-TTT0103'],
+    });
+    expect(moved.ok).toBe(true);
+    expect(moved.ok && moved.lineLayouts[label.textLines[0].id].fontSizePt).toBeLessThan(32);
+    expect(label.style.fontSizePt).toBe(32);
   });
 
   it('自动适配忽略不产生打印内容的空行', () => {
@@ -177,7 +382,7 @@ describe('唛头排版', () => {
     expect(result).toEqual({ ok: false, error: '固定字号下内容超出唛头范围' });
   });
 
-  it('打印前同时报告待校对、数量和内容问题', () => {
+  it('打印前报告数量和内容问题，但不报告人工校对状态', () => {
     const label = createLabel({
       content: '   ',
       contentType: 'text',
@@ -193,7 +398,6 @@ describe('唛头排版', () => {
     expect(validateLabelForPrint(label, defaultSizePresets[1])).toEqual([
       '唛头内容不能为空',
       '打印数量必须是正整数',
-      '该唛头尚未完成校对',
     ]);
   });
 });

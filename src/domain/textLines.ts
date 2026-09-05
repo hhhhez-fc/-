@@ -1,4 +1,4 @@
-import type { LabelTextLine, TextPlacement } from './labels';
+import type { InlineTextStyle, LabelTextLine, TextPlacement } from './labels';
 
 export type TextLineAlignment = 'left' | 'center' | 'right' | 'keep';
 
@@ -97,4 +97,57 @@ export function alignTextLines(lines: LabelTextLine[], alignment: TextLineAlignm
 
 export function contentWithUpdatedTextLine(lines: LabelTextLine[], id: string, text: string): string {
   return lines.map((line) => line.id === id ? text : line.text).join('\n');
+}
+
+export type TextLinePatch = Partial<Pick<LabelTextLine, 'textOrientation'>> & { style?: InlineTextStyle };
+
+export function updateSelectedTextLines(
+  lines: LabelTextLine[],
+  selectedIds: string[],
+  patch: TextLinePatch,
+): LabelTextLine[] {
+  const selected = new Set(selectedIds);
+  return lines.map((line) => selected.has(line.id) ? {
+    ...line,
+    ...patch,
+    style: patch.style ? { ...line.style, ...patch.style } : { ...line.style },
+    placement: { ...line.placement },
+  } : line);
+}
+
+export function moveSelectedTextLines(
+  lines: LabelTextLine[],
+  selectedIds: string[],
+  dx: number,
+  dy: number,
+): LabelTextLine[] {
+  const selected = new Set(selectedIds);
+  const moving = lines.filter((line) => selected.has(line.id));
+  if (!moving.length) return lines;
+  const clampedX = Math.max(
+    -Math.min(...moving.map((line) => line.placement.xPercent)),
+    Math.min(dx, 100 - Math.max(...moving.map((line) => line.placement.xPercent))),
+  );
+  const clampedY = Math.max(
+    -Math.min(...moving.map((line) => line.placement.yPercent)),
+    Math.min(dy, 100 - Math.max(...moving.map((line) => line.placement.yPercent))),
+  );
+  return lines.map((line) => selected.has(line.id) ? {
+    ...line,
+    placement: {
+      xPercent: line.placement.xPercent + clampedX,
+      yPercent: line.placement.yPercent + clampedY,
+      horizontalSnap: clampedX ? 'free' : line.placement.horizontalSnap,
+      verticalSnap: clampedY ? 'free' : line.placement.verticalSnap,
+    },
+  } : line);
+}
+
+export function cloneTextLinesWithFreshIds(lines: LabelTextLine[]): LabelTextLine[] {
+  return lines.map((line) => ({
+    ...line,
+    id: crypto.randomUUID(),
+    style: { ...line.style },
+    placement: { ...line.placement },
+  }));
 }

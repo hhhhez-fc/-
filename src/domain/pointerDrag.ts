@@ -45,10 +45,11 @@ export function resolvePointerDragUpdate(
   start: PointerDragStart,
   current: { clientX: number; clientY: number },
   bounds: { width: number; height: number },
+  dragging = false,
 ): TextPlacement | null {
   const deltaX = current.clientX - start.clientX;
   const deltaY = current.clientY - start.clientY;
-  if (!didPointerMove(start, current)) return null;
+  if (!dragging && !didPointerMove(start, current)) return null;
   if (!bounds.width || !bounds.height) return null;
   return resolvePlacement(
     start.placement.xPercent + (deltaX / bounds.width) * 100,
