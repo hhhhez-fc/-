@@ -81,7 +81,7 @@ describe('打印文字旋转', () => {
   });
 
   it('旋转后不缩小文字并保持该组可打印', () => {
-    const label = textLabel('MMMMMMMMMMMMMMM');
+    const label = textLabel('MMMMMM');
     const plan = createPrintPlan([label], defaultSizePresets);
     expect(plan.blockers).toEqual([]);
     const html = renderToStaticMarkup(<PrintReviewDialog

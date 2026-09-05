@@ -62,9 +62,9 @@ describe('字号逐字输入', () => {
     { raw: '2', action: 'Enter', lastApplied: 26, expected: 8 },
     { raw: '1e', action: 'Enter', lastApplied: 26, expected: 8 },
     { raw: '0', action: 'blur', lastApplied: 26, expected: 8 },
-    { raw: '121', action: 'Enter', lastApplied: 12, expected: 120 },
-    { raw: '999', action: 'blur', lastApplied: 99, expected: 120 },
-    { raw: '1e20', action: 'Enter', lastApplied: 100, expected: 120 },
+    { raw: '301', action: 'Enter', lastApplied: 30, expected: 300 },
+    { raw: '999', action: 'blur', lastApplied: 99, expected: 300 },
+    { raw: '1e20', action: 'Enter', lastApplied: 100, expected: 300 },
   ])('输入 $raw 在 $action 时规范化，编辑期间保留最后合法值', async ({ raw, action, lastApplied, expected }) => {
     const user = userEvent.setup();
     const input = renderEditor();

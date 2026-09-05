@@ -36,9 +36,10 @@ afterEach(() => {
 
 const labelFor = (content: string) => createLabel({ content, quantity: 1, source: 'manual', needsReview: false });
 
-function PreviewHarness() {
+function PreviewHarness({ fontSizePt = 26 }: { fontSizePt?: number } = {}) {
   const [label, setLabel] = useState(() => {
     const initial = labelFor('A\nB\nC');
+    initial.style.fontSizePt = fontSizePt;
     initial.printArea = { leftMm: 5, topMm: 5, widthMm: 50, heightMm: 30 };
     initial.textLines.forEach((line, index) => { line.placement.xPercent = 30 + index * 20; });
     return initial;
@@ -95,6 +96,20 @@ describe('最终审查回归', () => {
     }
   });
 
+  it('固定字号文字拖动到边缘后保持渲染字号并显示越界错误', () => {
+    render(<PreviewHarness fontSizePt={120} />);
+    mockBounds(document.querySelector('.label-content-layer')!);
+    const line = screen.getByRole('button', { name: /拖动第 1 行/ });
+    const renderedFontSize = line.style.fontSize;
+
+    fireEvent.pointerDown(line, { clientX: 100, clientY: 60 });
+    fireEvent.pointerMove(line, { clientX: 180, clientY: 60 });
+
+    expect(currentLabel().style).toMatchObject({ fontMode: 'fixed', fontSizePt: 120 });
+    expect(screen.getByRole('button', { name: /拖动第 1 行/ }).style.fontSize).toBe(renderedFontSize);
+    expect(screen.getByText('固定字号下内容超出唛头范围')).toBeTruthy();
+  });
+
   it('文字方向键只移动选中行，打印区域和未选行保持物理位置', () => {
     render(<PreviewHarness />);
     const original = currentLabel();
@@ -148,7 +163,7 @@ describe('最终审查回归', () => {
     };
     try {
       const layout = solveLabelTextLayout(label, { ...defaultSizePresets[1], minFontSize: 1e20 });
-      expect(layout.fontSize).toBeLessThanOrEqual(120);
+      expect(layout.fontSize).toBeLessThanOrEqual(300);
     } finally { Array.prototype.push = push; }
   });
 
@@ -159,9 +174,9 @@ describe('最终审查回归', () => {
     label.textStyleRanges = [{ start: 0, end: 1, style: { fontSizePt: Number.MAX_VALUE } }];
     saveDraft(window.localStorage, { ...createInitialDraft(), labels: [label] });
     const hydrated = loadDraft(window.localStorage)!.labels[0];
-    expect(hydrated.style.fontSizePt).toBe(120);
+    expect(hydrated.style.fontSizePt).toBe(300);
     expect(hydrated.textLines[0].style.fontSizePt).toBe(8);
-    expect(hydrated.textStyleRanges[0].style.fontSizePt).toBe(120);
+    expect(hydrated.textStyleRanges[0].style.fontSizePt).toBe(300);
   });
 
   it('旧自动换行求解入口也限制巨大字号范围', () => {
@@ -187,7 +202,7 @@ describe('最终审查回归', () => {
     expect(validateLabelForPrint(label, defaultSizePresets[1])).toEqual([]);
   });
 
-  it.each([['1e20', 120], ['0', 8], ['-9', 8]])('编辑器在失焦后把字号 %s 钳制到可编辑范围', (value, expected) => {
+  it.each([['1e20', 300], ['0', 8], ['-9', 8]])('编辑器在失焦后把字号 %s 钳制到可编辑范围', (value, expected) => {
     const label = labelFor('A');
     const onChange = vi.fn();
     render(<LabelEditor label={label} activeLineId={label.textLines[0].id} selectedLineIds={[label.textLines[0].id]}

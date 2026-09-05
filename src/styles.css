@@ -407,14 +407,20 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .all-text-style-fields { grid-column: 1/-1; grid-template-columns: 1.15fr .9fr .65fr 1.1fr; gap: .35rem; }
 .style-panel .field { gap: .18rem; font-size: .68rem; }
 .style-panel .field input, .style-panel .field select, .font-size-trigger { min-height: 2.05rem; padding: .35rem .45rem; font-size: .74rem; }
+.font-size-picker-control { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .25rem; min-width: 0; }
+.font-size-input-wrap { position: relative; min-width: 0; }
+.style-panel .field .font-size-input { width: 100%; min-width: 3.9rem; padding-right: 1.65rem; appearance: textfield; }
+.font-size-input::-webkit-inner-spin-button,
+.font-size-input::-webkit-outer-spin-button { margin: 0; appearance: none; }
+.font-size-input-wrap > span { position: absolute; top: 50%; right: .4rem; color: var(--color-muted); font: 700 .6rem Bahnschrift, Consolas, monospace; transform: translateY(-50%); pointer-events: none; }
 .font-size-trigger {
-  display: flex; align-items: center; justify-content: space-between; gap: .45rem; width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: .3rem; width: auto; white-space: nowrap;
   color: var(--color-ink); text-align: left; background: var(--color-control-surface); border: 1px solid var(--color-control-border); border-radius: var(--radius-md);
 }
 .font-size-trigger:hover { border-color: var(--color-ink); }
 .font-size-trigger-icon { color: var(--color-muted); font-size: .65rem; }
 .font-size-content {
-  z-index: var(--z-popover); width: var(--radix-select-trigger-width); max-height: min(22rem,var(--radix-select-content-available-height));
+  z-index: var(--z-popover); width: max(var(--radix-select-trigger-width),8.5rem); max-height: min(22rem,var(--radix-select-content-available-height));
   overflow: hidden; background: var(--color-control-surface); border: 1px solid var(--color-control-border); border-radius: var(--radius-md); box-shadow: 0 8px 22px color-mix(in srgb,var(--color-ink) 18%,transparent);
 }
 .font-size-viewport { padding: .2rem; }

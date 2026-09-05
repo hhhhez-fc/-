@@ -9,7 +9,7 @@ import {
   type TextResizeHandle,
 } from '../domain/pointerDrag';
 import { contentWithUpdatedTextLine, moveSelectedTextLines, updateTextLine } from '../domain/textLines';
-import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset } from '../domain/labels';
+import { MAX_FONT_SIZE_PT, MIN_FONT_SIZE_PT, type LabelRecord, type LabelTextLine, type PrintAreaMm, type SizePreset } from '../domain/labels';
 import { placementTransform } from '../domain/printRotation';
 import { StyledTextLine } from './StyledText';
 
@@ -198,7 +198,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     event.stopPropagation();
     const amount = event.shiftKey ? 5 : 1;
     const current = line.style.fontSizePt ?? label.style.fontSizePt;
-    patchLine(line, { style: { ...line.style, fontSizePt: Math.max(8, Math.min(120, current + direction * amount)) } });
+    patchLine(line, { style: { ...line.style, fontSizePt: Math.max(MIN_FONT_SIZE_PT, Math.min(MAX_FONT_SIZE_PT, current + direction * amount)) } });
   };
   const startEditing = (line: LabelTextLine) => {
     onActiveLineChange(line.id);
@@ -352,8 +352,8 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
                 key={handle}
                 className={`text-resize-handle text-handle-${handle}`}
                 aria-label={`从${handle === 'nw' ? '左上' : handle === 'ne' ? '右上' : handle === 'se' ? '右下' : '左下'}调整第 ${index + 1} 行文字大小；方向键调整字号，Shift 加速`}
-                aria-valuemin={8}
-                aria-valuemax={120}
+                aria-valuemin={MIN_FONT_SIZE_PT}
+                aria-valuemax={MAX_FONT_SIZE_PT}
                 aria-valuenow={line.style.fontSizePt ?? label.style.fontSizePt}
                 onKeyDown={(event) => resizeTextWithKeyboard(line, event)}
                 onPointerDown={(event) => {

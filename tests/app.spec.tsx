@@ -169,6 +169,7 @@ describe('打印检查', () => {
   it('合法的旧待校对唛头可进入预览并立即写入历史', async () => {
     const user = userEvent.setup();
     const legacy = createLabel({ content: 'LEGACY-READY', quantity: 1, source: 'manual', needsReview: true });
+    legacy.style.fontMode = 'auto';
     const state = { ...createInitialDraft(), labels: [legacy], activeLabelId: legacy.id };
     render(<App initialState={state} />);
 
@@ -184,6 +185,7 @@ describe('打印检查', () => {
   it('列表内修改打印数量会更新下一次预览的总张数', async () => {
     const user = userEvent.setup();
     const label = createLabel({ content: 'QUANTITY-PREVIEW', quantity: 1, sides: 2, source: 'manual', needsReview: false });
+    label.style.fontMode = 'auto';
     const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
     render(<App initialState={state} />);
 
@@ -259,6 +261,7 @@ describe('打印检查', () => {
       source: 'manual',
       needsReview: false,
     });
+    label.style.fontMode = 'auto';
     const plan = createPrintPlan([label], defaultSizePresets);
     const html = renderToStaticMarkup(<PrintReviewDialog
       open
@@ -281,6 +284,7 @@ describe('打印检查', () => {
       source: 'manual',
       needsReview: false,
     });
+    label.style.fontMode = 'auto';
     const plan = createPrintPlan([label], defaultSizePresets);
     const html = renderToStaticMarkup(<PrintReviewDialog
       open
@@ -307,6 +311,7 @@ describe('打印检查', () => {
       source: 'manual',
       needsReview: false,
     });
+    label.style.fontMode = 'auto';
     const group = createPrintPlan([label], defaultSizePresets).groups[0];
     const html = renderToStaticMarkup(<PrintPages group={group} />);
 
@@ -384,6 +389,7 @@ describe('逐行预览', () => {
       needsReview: false,
       printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
     });
+    label.style.fontMode = 'auto';
     label.style.fontSizePt = 48;
     const previewHtml = renderToStaticMarkup(<LabelPreview
       label={label}
@@ -413,6 +419,7 @@ describe('逐行预览', () => {
       needsReview: false,
       printArea: { leftMm: 25, topMm: 10, widthMm: 50, heightMm: 40 },
     });
+    label.style.fontMode = 'auto';
     label.style.fontSizePt = 48;
     label.textLines[0].placement.yPercent = 22;
     label.textLines[1].placement.yPercent = 72;
@@ -443,6 +450,7 @@ describe('逐行预览', () => {
       needsReview: false,
       printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
     });
+    label.style.fontMode = 'auto';
     label.style.fontSizePt = 48;
     label.textStyleRanges = [{ start: 0, end: 1, style: { fontSizePt: 60 } }];
     const previewHtml = renderToStaticMarkup(<LabelPreview
@@ -490,6 +498,7 @@ describe('逐行预览', () => {
       source: 'image',
       needsReview: true,
     });
+    label.style.fontMode = 'auto';
     label.style.fontSizePt = 12;
     const preset = defaultSizePresets.find((item) => item.id === 'small')!;
     const html = renderToStaticMarkup(<LabelPreview

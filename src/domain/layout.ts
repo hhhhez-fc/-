@@ -157,6 +157,7 @@ function scaledRectFitsBounds(rect: ReturnType<typeof scaledLineRect>, width: nu
 
 export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): LabelLayoutResult {
   const printArea = resolvePrintArea(label.printArea, preset);
+  const usesFixedFontSize = label.style.fontMode === 'fixed';
   const width = Math.max(1, printArea.widthMm * MM_TO_PX);
   const height = Math.max(1, printArea.heightMm * MM_TO_PX);
   const printableLineIndexes = label.textLines
@@ -168,13 +169,16 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
 
   for (const index of printableLineIndexes) {
     const requested = requestedLineSize(label, index);
-    const resolved = fontSizeCandidates(requested, preset.minFontSize).find((candidate) => {
+    const candidates = usesFixedFontSize ? [requested] : fontSizeCandidates(requested, preset.minFontSize);
+    const resolved = candidates.find((candidate) => {
       const fontScale = candidate / requested;
       const rect = scaledLineRect(label, index, candidate, fontScale, width, height);
       return scaledRectFitsBounds(rect, width, height);
     });
     if (resolved === undefined) {
-      const fallbackFontSize = Math.min(requested, clampFontSizePt(preset.minFontSize));
+      const fallbackFontSize = usesFixedFontSize
+        ? requested
+        : Math.min(requested, clampFontSizePt(preset.minFontSize));
       lineLayouts[label.textLines[index].id] = {
         fontSizePt: fallbackFontSize,
         fontScale: fallbackFontSize / requested,
@@ -193,7 +197,7 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
   if (firstOverflowFontSize !== undefined) {
     return {
       ok: false,
-      error: '内容在最小字号下仍无法完整显示',
+      error: usesFixedFontSize ? '固定字号下内容超出唛头范围' : '内容在最小字号下仍无法完整显示',
       fontSize: firstOverflowFontSize,
       lineLayouts,
     };

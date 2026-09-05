@@ -106,8 +106,9 @@ describe('唛头排版', () => {
     expect(getPreviewScale(260, 130)).toBeCloseTo(0.5292, 3);
   });
 
-  it('短内容保留用户字号，长内容只缩小到最大可用字号', () => {
+  it('自动适配保留能容纳的字号，并把长内容缩小到最大可用字号', () => {
     const short = createLabel({ content: 'FY', quantity: 1, source: 'manual', needsReview: false });
+    short.style.fontMode = 'auto';
     short.style.fontSizePt = 48;
     const shortLayout = solveLabelTextLayout(short, defaultSizePresets[0]);
 
@@ -117,6 +118,7 @@ describe('唛头排版', () => {
       source: 'manual',
       needsReview: false,
     });
+    long.style.fontMode = 'auto';
     long.style.fontSizePt = 48;
     const longLayout = solveLabelTextLayout(long, defaultSizePresets[1]);
 
@@ -127,6 +129,7 @@ describe('唛头排版', () => {
 
   it('局部字符字号按同一比例缩小', () => {
     const label = createLabel({ content: 'LONG-LONG-LONG', quantity: 1, source: 'manual', needsReview: false });
+    label.style.fontMode = 'auto';
     label.style.fontSizePt = 40;
     label.textStyleRanges = [{ start: 0, end: 4, style: { fontSizePt: 60 } }];
 
@@ -146,6 +149,7 @@ describe('唛头排版', () => {
       printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
     });
     plain.style.fontSizePt = 38;
+    plain.style.fontMode = 'auto';
     plain.style.fontWeight = 400;
     const bold = createLabel({
       content: 'MMMM',
@@ -155,6 +159,7 @@ describe('唛头排版', () => {
       printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
     });
     bold.style.fontSizePt = 38;
+    bold.style.fontMode = 'auto';
     bold.style.fontWeight = 700;
 
     const plainResult = solveLabelTextLayout(plain, defaultSizePresets[0]);
@@ -173,6 +178,7 @@ describe('唛头排版', () => {
       printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
     });
     plain.style.fontSizePt = 38;
+    plain.style.fontMode = 'auto';
     plain.style.fontWeight = 400;
     plain.style.italic = false;
     const italic = createLabel({
@@ -183,6 +189,7 @@ describe('唛头排版', () => {
       printArea: { leftMm: 25.25, topMm: 15, widthMm: 49.5, heightMm: 30 },
     });
     italic.style.fontSizePt = 38;
+    italic.style.fontMode = 'auto';
     italic.style.fontWeight = 400;
     italic.style.italic = true;
 
@@ -200,6 +207,7 @@ describe('唛头排版', () => {
       source: 'manual',
       needsReview: false,
     });
+    label.style.fontMode = 'auto';
     label.style.fontSizePt = 48;
 
     const result = solveLabelTextLayout(label, defaultSizePresets[1]);
@@ -220,6 +228,7 @@ describe('唛头排版', () => {
       source: 'manual',
       needsReview: false,
     });
+    label.style.fontMode = 'auto';
     label.style.fontSizePt = 48;
 
     const result = solveLabelTextLayout(label, defaultSizePresets[1]);
@@ -231,7 +240,7 @@ describe('唛头排版', () => {
     });
   });
 
-  it('移动文字后只缩小渲染字号，不改变用户设置的上限', () => {
+  it('固定字号文字移动到边缘后保持字号并报告越界', () => {
     const label = createLabel({
       content: 'FYF-TTT0103',
       quantity: 1,
@@ -256,8 +265,12 @@ describe('唛头排版', () => {
       lineLayouts: { [label.textLines[0].id]: { fontSizePt: 32, fontScale: 1 } },
       lines: ['FYF-TTT0103'],
     });
-    expect(moved.ok).toBe(true);
-    expect(moved.ok && moved.lineLayouts[label.textLines[0].id].fontSizePt).toBeLessThan(32);
+    expect(moved).toMatchObject({
+      ok: false,
+      error: '固定字号下内容超出唛头范围',
+      fontSize: 32,
+      lineLayouts: { [label.textLines[0].id]: { fontSizePt: 32, fontScale: 1 } },
+    });
     expect(label.style.fontSizePt).toBe(32);
   });
 

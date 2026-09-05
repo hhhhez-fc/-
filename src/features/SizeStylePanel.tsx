@@ -32,13 +32,13 @@ export default function SizeStylePanel({ label, presets, onChange, onPresetChang
             <option value={'"Times New Roman", serif'}>Times New Roman</option>
             <option value={'Consolas, monospace'}>等宽字体</option>
           </select></label>
-          <label className="field"><span>全部字号</span><FontSizePicker
+          <div className="field"><span>全部字号</span><FontSizePicker
             value={label.style.fontMode === 'auto'
               ? { fontMode: 'auto' }
               : { fontMode: 'fixed', fontSizePt: label.style.fontSizePt }}
             onPreview={onFontSizePreview}
             onCommit={(choice) => patchAllTextStyle(choice)}
-          /></label>
+          /></div>
           <label className="field"><span>行距</span><select value={label.style.lineHeight} onChange={(event) => patchStyle({ lineHeight: Number(event.target.value) as LabelStyle['lineHeight'] })}>
             <option value="1.05">紧凑</option>
             <option value="1.2">标准</option>

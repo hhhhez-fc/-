@@ -46,5 +46,9 @@ describe('预览文字拖动', () => {
       { fontSizePt: 10, width: 100, height: 20, handle: 'nw' },
       { deltaX: 300, deltaY: 300 },
     )).toBe(8);
+    expect(resolveTextResizeFontSize?.(
+      { fontSizePt: 240, width: 100, height: 20, handle: 'se' },
+      { deltaX: 300, deltaY: 300 },
+    )).toBe(300);
   });
 });

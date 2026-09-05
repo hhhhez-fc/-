@@ -12,7 +12,7 @@ export interface InlineTextStyle {
 }
 
 export const MIN_FONT_SIZE_PT = 8;
-export const MAX_FONT_SIZE_PT = 120;
+export const MAX_FONT_SIZE_PT = 300;
 
 export function clampFontSizePt(value: number): number {
   return Number.isFinite(value)
