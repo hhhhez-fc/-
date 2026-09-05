@@ -58,7 +58,7 @@ const textResizeHandles: TextResizeHandle[] = ['nw', 'ne', 'se', 'sw'];
 export default function LabelPreview({ label, preset, activeLineId, selectedLineIds, onActiveLineChange, onSelectLine, onClearLineSelection, onChange }: LabelPreviewProps) {
   const paperRef = useRef<HTMLDivElement>(null);
   const contentLayerRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<(PointerDragStart & { lineId: string }) | null>(null);
+  const dragStartRef = useRef<(PointerDragStart & { lineId: string; lines: LabelTextLine[]; selectedIds: string[]; moved: boolean }) | null>(null);
   const textResizeRef = useRef<TextResizeStart | null>(null);
   const printAreaDragRef = useRef<PrintAreaDragStart | null>(null);
   const printAreaHandleMovedRef = useRef(false);
@@ -119,9 +119,9 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     printAreaDragRef.current = null;
     setIsAreaDragging(false);
-    window.setTimeout(() => { printAreaHandleMovedRef.current = false; }, 0);
   };
   const movePrintAreaWithKeyboard = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return;
     const amount = event.shiftKey ? 2 : 0.5;
     const movement: Record<string, [number, number]> = {
       ArrowLeft: [-amount, 0], ArrowRight: [amount, 0], ArrowUp: [0, -amount], ArrowDown: [0, amount],
@@ -151,13 +151,13 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     const bounds = contentLayerRef.current?.getBoundingClientRect();
     const start = dragStartRef.current;
     if (!bounds || !start || start.lineId !== line.id) return;
-    const placement = resolvePointerDragUpdate(start, event, bounds);
+    const placement = resolvePointerDragUpdate(start, event, bounds, start.moved);
     if (!placement) return;
+    start.moved = true;
     setDraggingId(line.id);
-    const ids = selectedLineIds.includes(line.id) ? selectedLineIds : [line.id];
     onChange({ textLines: moveSelectedTextLines(
-      label.textLines,
-      ids,
+      start.lines,
+      start.selectedIds,
       placement.xPercent - start.placement.xPercent,
       placement.yPercent - start.placement.yPercent,
     ) });
@@ -170,6 +170,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     const delta = movement[event.key];
     if (!delta) return;
     event.preventDefault();
+    event.stopPropagation();
     const ids = selectedLineIds.includes(line.id) ? selectedLineIds : [line.id];
     onChange({ textLines: moveSelectedTextLines(label.textLines, ids, delta[0], delta[1]) });
   };
@@ -245,18 +246,19 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
         }}
         onKeyDown={movePrintAreaWithKeyboard}
         onPointerDown={(event) => {
+          printAreaHandleMovedRef.current = false;
           event.currentTarget.setPointerCapture(event.pointerId);
           printAreaDragRef.current = { clientX: event.clientX, clientY: event.clientY, area: printArea, mode: 'move' };
         }}
         onClick={(event) => {
-          if (event.target === event.currentTarget) onClearLineSelection();
+          if (event.target === event.currentTarget && !printAreaHandleMovedRef.current) onClearLineSelection();
         }}
         onPointerMove={updatePrintAreaFromPointer}
         onPointerUp={finishPrintAreaDrag}
         onPointerCancel={() => { printAreaDragRef.current = null; setIsAreaDragging(false); }}
       >
         <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }} onClick={(event) => {
-          if (event.target === event.currentTarget) onClearLineSelection();
+          if (event.target === event.currentTarget && !printAreaHandleMovedRef.current) onClearLineSelection();
         }}>
         {draggingId && <><i className="snap-guide guide-x" /><i className="snap-guide guide-y" /></>}
         {label.contentType === 'image' && label.imageFallback ? <img src={label.imageFallback} alt="待打印唛头" /> : showDirectEntry ? (
@@ -324,6 +326,9 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
                     clientX: event.clientX,
                     clientY: event.clientY,
                     placement: line.placement,
+                    lines: label.textLines,
+                    selectedIds: selectedLineIds.includes(line.id) ? selectedLineIds : [...selectedLineIds, line.id],
+                    moved: false,
                   };
                 }}
                 onPointerMove={(event) => { if (dragStartRef.current?.lineId === line.id) moveFromPointer(line, event); }}

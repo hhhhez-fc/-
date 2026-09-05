@@ -1,4 +1,4 @@
-import type { LabelRecord, SizePreset } from './labels';
+import { clampFontSizePt, MAX_FONT_SIZE_PT, MIN_FONT_SIZE_PT, type LabelRecord, type SizePreset } from './labels';
 import { buildStyledSegments } from './richText';
 import { resolvePrintArea } from './placement';
 import { MAX_LABEL_QUANTITY } from './quantity';
@@ -72,17 +72,18 @@ function rectsOverlap(a: TextRect, b: TextRect): boolean {
 
 function requestedLineSize(label: LabelRecord, lineIndex: number): number {
   const requested = label.textLines[lineIndex].style.fontSizePt ?? label.style.fontSizePt;
-  return Number.isFinite(requested) && requested > 0 ? requested : 1;
+  return clampFontSizePt(requested);
 }
 
 function fontSizeCandidates(requested: number, minimum: number): number[] {
-  const safeMinimum = Number.isFinite(minimum) && minimum > 0 ? minimum : 1;
-  const lowerBound = Math.min(requested, safeMinimum);
+  const upperBound = clampFontSizePt(requested);
+  const lowerBound = Math.min(upperBound, clampFontSizePt(minimum));
   const candidates: number[] = [];
-  let candidate = requested;
-  while (candidate > lowerBound) {
+  // The iteration limit also protects this search independently of input magnitude.
+  for (let step = 0; step <= MAX_FONT_SIZE_PT - MIN_FONT_SIZE_PT; step += 1) {
+    const candidate = upperBound - step;
+    if (candidate <= lowerBound) break;
     candidates.push(candidate);
-    candidate = Math.max(lowerBound, candidate - 1);
   }
   candidates.push(lowerBound);
   return candidates;
@@ -104,7 +105,7 @@ function scaledLineDimensions(
       ...segment.style,
     };
     const explicitFontSizePt = segment.style.fontSizePt ?? line.style.fontSizePt;
-    const fontSizePt = explicitFontSizePt === undefined ? baseFontSizePt : explicitFontSizePt * fontScale;
+    const fontSizePt = explicitFontSizePt === undefined ? baseFontSizePt : clampFontSizePt(explicitFontSizePt) * fontScale;
     const fontSizePx = fontSizePt * PT_TO_PX;
     const emphasis = (style.fontWeight === 700 ? 1.04 : 1) * (style.italic ? 1.04 : 1);
     return { text: segment.text, fontSizePx, emphasis };
@@ -183,7 +184,7 @@ export function solveLabelTextLayout(
       return scaledRectFitsBounds(rect, width, height);
     });
     if (resolved === undefined) {
-      const fallbackFontSize = Math.min(requested, preset.minFontSize);
+      const fallbackFontSize = Math.min(requested, clampFontSizePt(preset.minFontSize));
       lineLayouts[label.textLines[index].id] = {
         fontSizePt: fallbackFontSize,
         fontScale: fallbackFontSize / requested,
@@ -236,11 +237,8 @@ export function solveTextLayout(input: LayoutInput): LayoutResult {
   const height = Math.max(1, (input.heightMm - input.paddingMm * 2) * MM_TO_PX);
   const lineHeight = input.lineHeight ?? 1.28;
   const candidates = input.fixedFontSize === undefined
-    ? Array.from(
-      { length: Math.max(0, input.maxFontSize - input.minFontSize + 1) },
-      (_, index) => input.maxFontSize - index,
-    )
-    : [input.fixedFontSize];
+    ? fontSizeCandidates(input.maxFontSize, input.minFontSize)
+    : [clampFontSizePt(input.fixedFontSize)];
 
   for (const fontSize of candidates) {
     const fontSizePx = fontSize * (96 / 72);

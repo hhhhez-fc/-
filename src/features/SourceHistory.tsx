@@ -5,6 +5,8 @@ interface SourceHistoryProps {
   onRestore: (entry: RecentLabelEntry) => void;
 }
 
+const sourceNames = { manual: '手动', excel: 'Excel', image: '图片' };
+
 export default function SourceHistory({ entries, onRestore }: SourceHistoryProps) {
   return (
     <section className="source-history" aria-labelledby="source-history-title">
@@ -18,7 +20,7 @@ export default function SourceHistory({ entries, onRestore }: SourceHistoryProps
             <li key={entry.id}>
               <div>
                 <strong>{entry.label.content.trim().split(/\r?\n/)[0]}</strong>
-                <span>{entry.preset.widthMm} × {entry.preset.heightMm} mm · {entry.label.quantity} 件</span>
+                <span>{entry.preset.widthMm} × {entry.preset.heightMm} mm · {entry.label.quantity} 件 · {sourceNames[entry.label.source]}</span>
               </div>
               <button type="button" onClick={() => onRestore(entry)}>再次使用</button>
             </li>

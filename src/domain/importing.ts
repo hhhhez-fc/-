@@ -140,8 +140,7 @@ export function rowsToLabelsWithColumns(
         quantity: parsed.quantity,
         sides: 1,
         source: 'excel',
-        needsReview: parsed.needsReview,
-        reviewReason: parsed.needsReview ? '未识别到有效数量，请确认打印数量' : undefined,
+        needsReview: false,
       });
     })
     .filter((label): label is LabelRecord => label !== null);

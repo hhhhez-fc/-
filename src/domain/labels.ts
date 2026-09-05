@@ -11,6 +11,21 @@ export interface InlineTextStyle {
   underline?: boolean;
 }
 
+export const MIN_FONT_SIZE_PT = 8;
+export const MAX_FONT_SIZE_PT = 120;
+
+export function clampFontSizePt(value: number): number {
+  return Number.isFinite(value)
+    ? Math.max(MIN_FONT_SIZE_PT, Math.min(MAX_FONT_SIZE_PT, value))
+    : MIN_FONT_SIZE_PT;
+}
+
+export function normalizeInlineFontSize<T extends InlineTextStyle>(style: T): T {
+  return style.fontSizePt === undefined
+    ? { ...style }
+    : { ...style, fontSizePt: clampFontSizePt(style.fontSizePt) };
+}
+
 export interface TextStyleRange {
   start: number;
   end: number;

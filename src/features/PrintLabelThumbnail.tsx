@@ -58,6 +58,7 @@ export default function PrintLabelThumbnail({ label, preset, rotation }: PrintLa
               label={label}
               line={line}
               lineIndex={lineIndex}
+              previewScale={previewScale}
               fontScale={lineLayout?.fontScale}
             /></span>;
           })}

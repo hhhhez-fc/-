@@ -4,7 +4,7 @@ import {
   resolveDefaultNewLabelPreset,
   type DraftState,
 } from './draft';
-import { defaultStyle, type LabelRecord } from './labels';
+import { defaultStyle, normalizeInlineFontSize, type LabelRecord } from './labels';
 import { createTextLines } from './textLines';
 import { hydrateRecentLabels } from './history';
 import { hydrateWorkspaceLayout } from './workspaceLayout';
@@ -58,9 +58,9 @@ function hydrateDraft(parsed: DraftState): DraftState {
       sides: legacy.sides ?? 1,
       sizeType: legacy.sizeType ?? (sizePresetId === 'large' ? 'large' : 'small'),
       sizePresetId,
-      style: { ...defaultStyle, ...legacy.style, fontMode: 'fixed' },
+      style: { ...normalizeInlineFontSize({ ...defaultStyle, ...legacy.style }), fontMode: 'fixed' },
       textStyleRanges: Array.isArray(legacy.textStyleRanges)
-        ? legacy.textStyleRanges.map((range) => ({ ...range, style: { ...range.style } }))
+        ? legacy.textStyleRanges.map((range) => ({ ...range, style: normalizeInlineFontSize(range.style) }))
         : [],
       placement: legacy.placement ? { ...legacy.placement } : {
         xPercent: 50,
@@ -70,7 +70,7 @@ function hydrateDraft(parsed: DraftState): DraftState {
       },
       printArea: legacy.printArea ? { ...legacy.printArea } : undefined,
       textLines: Array.isArray(legacy.textLines)
-        ? legacy.textLines.map((line) => ({ ...line, placement: { ...line.placement }, style: { ...line.style } }))
+        ? legacy.textLines.map((line) => ({ ...line, placement: { ...line.placement }, style: normalizeInlineFontSize(line.style) }))
         : createTextLines(legacy.content ?? ''),
       needsReview: typeof legacy.needsReview === 'boolean' ? legacy.needsReview : true,
     } as LabelRecord;

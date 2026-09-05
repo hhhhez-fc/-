@@ -1,5 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
-import type { InlineTextStyle, LabelRecord } from '../domain/labels';
+import { clampFontSizePt, type InlineTextStyle, type LabelRecord } from '../domain/labels';
 import { buildImmediateTextStylePatch } from '../domain/richText';
 import { updateSelectedTextLines, type TextLinePatch } from '../domain/textLines';
 
@@ -117,7 +117,7 @@ export default function LabelEditor({ label, activeLineId, selectedLineIds, onAc
             <option value={'"Times New Roman", serif'}>Times New Roman</option>
             <option value={'Consolas, monospace'}>等宽字体</option>
           </select></label>
-          <label className="field"><span>字号（pt）</span><input type="number" min="8" max="120" value={partialStyle.fontSizePt ?? 32} onChange={(event) => updatePartialStyle({ fontSizePt: Number(event.target.value) })} /></label>
+          <label className="field"><span>字号（pt）</span><input type="number" min="8" max="120" value={partialStyle.fontSizePt ?? 32} onChange={(event) => updatePartialStyle({ fontSizePt: clampFontSizePt(Number(event.target.value)) })} /></label>
         </div>
         {activeLine && <label className="field line-orientation"><span>{selectedLineIds.length ? '所选行方向' : '本行方向'}</span><select
           aria-label={selectedLineIds.length ? '所选行方向' : '本行方向'}

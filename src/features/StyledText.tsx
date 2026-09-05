@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { LabelRecord, LabelTextLine } from '../domain/labels';
+import { clampFontSizePt, type LabelRecord, type LabelTextLine } from '../domain/labels';
 import { buildStyledSegments } from '../domain/richText';
 
 interface StyledTextProps {
@@ -48,8 +48,8 @@ export function StyledTextLine({
       fontFamily: segment.style.fontFamily,
       fontSize: segment.style.fontSizePt
         ? previewScale === undefined
-          ? `${segment.style.fontSizePt * fontScale}pt`
-          : `${segment.style.fontSizePt * fontScale * (96 / 72) * previewScale}px`
+          ? `${clampFontSizePt(segment.style.fontSizePt) * fontScale}pt`
+          : `${clampFontSizePt(segment.style.fontSizePt) * fontScale * (96 / 72) * previewScale}px`
         : undefined,
       fontWeight: segment.style.fontWeight,
       fontStyle: segment.style.italic ? 'italic' : undefined,

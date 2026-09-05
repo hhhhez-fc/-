@@ -115,7 +115,7 @@ describe('使用过的唛头', () => {
     expect(screen.getByText('暂时没有使用记录')).toBeTruthy();
     rerender(<SourceHistory entries={[entry]} onRestore={onRestore} />);
     expect(screen.getByText('FY-01')).toBeTruthy();
-    expect(screen.getByText('100 × 60 mm · 2 件')).toBeTruthy();
+    expect(screen.getByText('100 × 60 mm · 2 件 · 手动')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: '再次使用' }));
     expect(onRestore).toHaveBeenCalledWith(entry);
   });
