@@ -263,7 +263,7 @@ export function validateLabelForPrint(label: LabelRecord, preset: SizePreset): s
   if (label.contentType === 'text' && !label.content.trim()) errors.push('唛头内容不能为空');
   if (label.contentType === 'image' && !label.imageFallback) errors.push('唛头图片不可用');
   if (!Number.isSafeInteger(label.quantity) || label.quantity < 1) errors.push('打印数量必须是正整数');
-  else if (label.quantity > MAX_LABEL_QUANTITY) errors.push(`基础数量不能超过 ${MAX_LABEL_QUANTITY}`);
+  else if (label.quantity > MAX_LABEL_QUANTITY) errors.push(`打印数量不能超过 ${MAX_LABEL_QUANTITY}`);
   if (!Number.isSafeInteger(label.sides) || label.sides < 1) errors.push('张贴面数必须是正整数');
   if (label.contentType === 'text' && label.content.trim()) {
     const layout = solveLabelTextLayout(label, preset);

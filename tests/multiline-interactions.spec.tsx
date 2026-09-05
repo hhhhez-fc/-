@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import App from '../src/App';
 import { createInitialDraft } from '../src/domain/draft';
 import { createLabel } from '../src/domain/labels';
+import { DRAFT_STORAGE_KEY } from '../src/domain/storage';
 
 beforeAll(() => {
   Object.defineProperties(HTMLElement.prototype, {
@@ -22,7 +23,10 @@ beforeAll(() => {
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 const stateWithLabel = (content: string) => {
   const label = createLabel({ content, quantity: 1, source: 'manual', needsReview: false });
@@ -44,7 +48,7 @@ describe('多行文字交互', () => {
     expect(screen.getByRole('button', { name: /拖动第 1 行/ }).getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('只激活一行的字符选区样式保留为局部范围，而不是整行样式', () => {
+  it('只激活一行的字符选区样式保留为局部范围，而不是整行样式', async () => {
     render(<App initialState={stateWithLabel('AB\nC')} />);
 
     const editor = screen.getByPlaceholderText(/FY-01/) as HTMLTextAreaElement;
@@ -55,6 +59,20 @@ describe('多行文字交互', () => {
     expect(screen.getByText('已应用 1 段局部样式；修改正文后会自动清除。')).toBeTruthy();
     expect(screen.getByText('A').style.fontWeight).toBe('400');
     expect(screen.getByRole('button', { name: /拖动第 1 行/ }).style.fontWeight).toBe('');
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(DRAFT_STORAGE_KEY) ?? '{}');
+      expect(saved.labels?.[0]?.textStyleRanges).toEqual([
+        {
+          start: 0,
+          end: 1,
+          style: {
+            fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+            fontSizePt: 26,
+            fontWeight: 400,
+          },
+        },
+      ]);
+    });
   });
 
   it('连续单击累加文字行，单击打印区域空白清空', async () => {

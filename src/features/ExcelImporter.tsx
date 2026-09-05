@@ -178,7 +178,7 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
             导入所选工作表
           </button>
           </> : <div className="region-importer">
-            <p className="mapping-note">按住鼠标拖过单元格。每个框选区域会合成一条唛头，可连续框选多个区域。</p>
+            <p className="mapping-note">按住鼠标拖过单元格。可连续框选多个区域，确认后会按顺序合并为一条唛头。</p>
             <div className="sheet-grid-wrap">
               <table className="sheet-grid" aria-label={`${activeSheet.name} 可框选区域`}>
                 <thead><tr><th aria-label="行号" />{Array.from({ length: columnCount }, (_, col) => <th key={col}>{formatCellRange({ startRow: 0, endRow: 0, startCol: col, endCol: col }).split(':')[0].replace(/\d+/g, '')}</th>)}</tr></thead>

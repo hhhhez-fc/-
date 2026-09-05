@@ -21,7 +21,7 @@ describe('Excel 表头识别', () => {
     });
   });
 
-  it('将表格行转换为待校对的唛头记录，并保持有效数量', () => {
+  it('将表格行转换为唛头记录，并保留旧草稿兼容状态', () => {
     const labels = rowsToLabels(['唛头', '数量'], [['箱唛 A', '3'], ['箱唛 B', '错误']], 'small');
     expect(labels.map(({ content, quantity, needsReview }) => ({ content, quantity, needsReview }))).toEqual([
       { content: '箱唛 A', quantity: 3, needsReview: false },
@@ -44,7 +44,7 @@ describe('打印数量校验', () => {
     expect(validateLabelForPrint(label, defaultSizePresets[0])).not.toContain('该唛头尚未完成校对');
   });
 
-  it.each(['0', '-3', '1.5', 'abc', ''])('将非法数量 %j 标记为需要校对', (input) => {
+  it.each(['0', '-3', '1.5', 'abc', ''])('将非法数量 %j 回退并写入旧兼容标记', (input) => {
     expect(parseQuantity(input)).toEqual({ quantity: 1, needsReview: true });
   });
 
@@ -52,16 +52,16 @@ describe('打印数量校验', () => {
     expect(parseQuantity('12')).toEqual({ quantity: 12, needsReview: false });
   });
 
-  it('将超过单条打印上限的数量标记为需要校对', () => {
+  it('将超过单条打印上限的数量回退并写入旧兼容标记', () => {
     expect(parseQuantity('1001')).toEqual({ quantity: 1, needsReview: true });
   });
 
-  it('阻止手动输入超过单条上限的基础数量', () => {
+  it('阻止手动输入超过单条上限的打印数量', () => {
     const label = createLabel({ content: 'A', quantity: 1001, source: 'manual', needsReview: false });
-    expect(validateLabelForPrint(label, defaultSizePresets[1])).toContain('基础数量不能超过 1000');
+    expect(validateLabelForPrint(label, defaultSizePresets[1])).toContain('打印数量不能超过 1000');
   });
 
-  it('将基础数量与张贴面数相乘得到最终打印份数', () => {
+  it('将列表打印数量与张贴面数相乘得到最终打印份数', () => {
     const label = createLabel({
       content: 'FY-01',
       contentType: 'text',

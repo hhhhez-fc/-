@@ -109,6 +109,10 @@ describe('逐行文字模型', () => {
     expect(next.map((line) => [line.style.fontSizePt, line.textOrientation])).toEqual([
       [32, 'vertical'], [undefined, 'horizontal'], [32, 'vertical'],
     ]);
+    expect(next[0]).not.toBe(lines[0]);
+    expect(next[0].style).not.toBe(lines[0].style);
+    expect(next[0].placement).not.toBe(lines[0].placement);
+    expect(next[1]).toBe(lines[1]);
   });
 
   it('整组移动保持间距并用共同边界限制位移', () => {
@@ -122,8 +126,14 @@ describe('逐行文字模型', () => {
 
   it('恢复历史时重建每条文字行 ID', () => {
     const lines = createTextLines('A\nB');
+    lines[0].style = { italic: false, fontSizePt: 24 };
+    lines[0].placement.xPercent = 17;
     const copy = cloneTextLinesWithFreshIds(lines);
     expect(copy.map((line) => line.id)).not.toEqual(lines.map((line) => line.id));
     expect(copy.map((line) => line.text)).toEqual(['A', 'B']);
+    copy[0].style.italic = true;
+    copy[0].placement.xPercent = 81;
+    expect(lines[0].style).toEqual({ italic: false, fontSizePt: 24 });
+    expect(lines[0].placement.xPercent).toBe(17);
   });
 });

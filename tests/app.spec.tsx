@@ -166,6 +166,34 @@ describe('使用过的唛头', () => {
 });
 
 describe('打印检查', () => {
+  it('合法的旧待校对唛头可进入预览并立即写入历史', async () => {
+    const user = userEvent.setup();
+    const legacy = createLabel({ content: 'LEGACY-READY', quantity: 1, source: 'manual', needsReview: true });
+    const state = { ...createInitialDraft(), labels: [legacy], activeLabelId: legacy.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog', { name: /可以打印/ })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '关闭' }));
+    expect(screen.getByText('使用过的唛头')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '再次使用' })).toBeTruthy();
+    await expectStoredHistory(['LEGACY-READY']);
+  });
+
+  it('列表内修改打印数量会更新下一次预览的总张数', async () => {
+    const user = userEvent.setup();
+    const label = createLabel({ content: 'QUANTITY-PREVIEW', quantity: 1, sides: 2, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '增加第 1 条唛头的打印数量' }));
+    await user.click(screen.getByRole('button', { name: '打印预览' }));
+
+    expect(screen.getByRole('dialog', { name: '共 4 张，可以打印' })).toBeTruthy();
+    expect(screen.getByText('1 × 程序生成 4 张 = 实际打印 4 张')).toBeTruthy();
+  });
+
   it('单条打印预览只记录当前合法唛头', async () => {
     const user = userEvent.setup();
     const active = createLabel({ content: 'ACTIVE', quantity: 1, source: 'manual', needsReview: false });
@@ -223,7 +251,7 @@ describe('打印检查', () => {
     })).resolves.toBe(false);
   });
 
-  it('明确要求系统打印份数保持 1，并按基础数量乘张贴面数生成打印张数', () => {
+  it('明确要求系统打印份数保持 1，并按列表打印数量乘张贴面数生成打印张数', () => {
     const label = createLabel({
       content: 'FYF-TTT0103',
       quantity: 3,
@@ -310,6 +338,14 @@ describe('打印检查', () => {
 
     await user.click(screen.getByRole('button', { name: '打印预览' }));
     const rotate = screen.getByRole('button', { name: '旋转 70 × 45 mm 第 1 个文字唛头 ROTATE-ME 90°' });
+    expect(screen.getByText('当前 0°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 90°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 180°')).toBeTruthy();
+    await user.click(rotate);
+    expect(screen.getByText('当前 270°')).toBeTruthy();
+    await user.click(rotate);
     expect(screen.getByText('当前 0°')).toBeTruthy();
     await user.click(rotate);
     expect(screen.getByText('当前 90°')).toBeTruthy();

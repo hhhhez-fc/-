@@ -41,4 +41,56 @@ describe('列表打印数量控件', () => {
     await user.type(input, '7{Enter}');
     expect(onCommit).toHaveBeenLastCalledWith(label.id, 7);
   });
+
+  it('在最小值和最大值禁用对应按钮，并把越界输入钳制到合法范围', async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    const minimum = createLabel({ content: 'MIN', quantity: 1, source: 'manual', needsReview: false });
+    const props = {
+      activeLabelId: minimum.id,
+      selectedLabelIds: [] as string[],
+      onActivate: () => undefined,
+      onToggleSelect: () => undefined,
+      onQuantityChange: onCommit,
+      onDuplicate: () => undefined,
+      onDelete: () => undefined,
+    };
+    const { rerender } = render(<LabelList labels={[minimum]} {...props} />);
+
+    expect((screen.getByRole('button', { name: '减少第 1 条唛头的打印数量' }) as HTMLButtonElement).disabled).toBe(true);
+    const input = screen.getByRole('spinbutton', { name: '第 1 条唛头的打印数量' });
+    await user.clear(input);
+    await user.type(input, '0{Enter}');
+    expect(onCommit).toHaveBeenLastCalledWith(minimum.id, 1);
+    await user.clear(input);
+    await user.type(input, '1001{Enter}');
+    expect(onCommit).toHaveBeenLastCalledWith(minimum.id, 1000);
+
+    const maximum = { ...minimum, quantity: 1000 };
+    rerender(<LabelList labels={[maximum]} {...props} />);
+    expect((screen.getByRole('button', { name: '增加第 1 条唛头的打印数量' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('空白输入失焦时归一为最小打印数量', async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    const label = createLabel({ content: 'BLANK', quantity: 6, source: 'manual', needsReview: false });
+    render(<LabelList
+      labels={[label]}
+      activeLabelId={label.id}
+      selectedLabelIds={[]}
+      onActivate={() => undefined}
+      onToggleSelect={() => undefined}
+      onQuantityChange={onCommit}
+      onDuplicate={() => undefined}
+      onDelete={() => undefined}
+    />);
+
+    const input = screen.getByRole('spinbutton', { name: '第 1 条唛头的打印数量' });
+    await user.clear(input);
+    await user.tab();
+
+    expect((input as HTMLInputElement).value).toBe('1');
+    expect(onCommit).toHaveBeenLastCalledWith(label.id, 1);
+  });
 });

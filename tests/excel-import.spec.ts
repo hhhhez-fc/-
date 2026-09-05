@@ -84,6 +84,8 @@ describe('Excel 工作簿导入', () => {
     await importWorkbook(userFile);
     fireEvent.click(screen.getByRole('button', { name: '框选区域' }));
 
+    expect(screen.getByText('按住鼠标拖过单元格。可连续框选多个区域，确认后会按顺序合并为一条唛头。')).toBeTruthy();
+
     const cells = within(screen.getByRole('table', { name: '外箱唛头 可框选区域' })).getAllByRole('cell');
     await selectRange(cells[2], cells[5]);
     await selectRange(cells[6], cells[7]);

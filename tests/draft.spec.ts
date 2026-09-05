@@ -50,7 +50,7 @@ describe('草稿状态', () => {
     expect(next.labels.map((label) => label.content)).toEqual(['A-UPDATED', 'B']);
   });
 
-  it('修改正文和数量不再写入待校对原因', () => {
+  it('修改正文和数量不再新增旧草稿校对原因', () => {
     const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false });
     const state = { ...createInitialDraft(), labels: [label] };
 

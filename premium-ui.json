@@ -12,16 +12,26 @@
     "CRUD"
   ],
   "ownership": {
-    "Select/Listbox": "native"
+    "Select/Listbox": "native",
+    "Quantity Stepper": "authored",
+    "Multiline Selection": "authored",
+    "Preview History": "authored",
+    "Print Rotation": "authored"
   },
   "requiredCommands": ["unit", "typecheck", "build"],
   "commands": {
-    "unit": "npm run test",
-    "typecheck": "npx tsc -b",
-    "build": "npm run build"
+    "unit": "pnpm test",
+    "typecheck": "pnpm exec tsc -b",
+    "build": "pnpm run build"
   },
   "evidence": {
-    "crudFullFlow": "tests/draft.spec.ts",
-    "failurePaths": "tests/printing.spec.ts"
+    "crudFullFlow": "tests/app.spec.tsx",
+    "failurePaths": "tests/printing.spec.ts",
+    "quantityStepper": "tests/quantity-controls.spec.tsx",
+    "multilineSelection": "tests/multiline-interactions.spec.tsx",
+    "previewHistory": "tests/history.spec.ts",
+    "printRotation": "tests/print-rotation.spec.tsx",
+    "excelRegionMerge": "tests/excel-import.spec.ts",
+    "shrinkOnlyLayout": "tests/domain.spec.ts"
   }
 }
