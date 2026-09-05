@@ -10,7 +10,7 @@ import {
 } from '../domain/pointerDrag';
 import { contentWithUpdatedTextLine, moveSelectedTextLines, updateTextLine } from '../domain/textLines';
 import type { LabelRecord, LabelTextLine, PrintAreaMm, SizePreset } from '../domain/labels';
-import { rotationTransform } from '../domain/printRotation';
+import { placementTransform } from '../domain/printRotation';
 import { StyledTextLine } from './StyledText';
 
 interface LabelPreviewProps {
@@ -282,7 +282,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
             const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
             const frameStyle: CSSProperties = {
               left: `${line.placement.xPercent}%`, top: `${line.placement.yPercent}%`,
-              transform: rotationTransform(line.placement, 0),
+              transform: placementTransform(line.placement),
             };
             const textStyle: CSSProperties = {
               textAlign: label.style.horizontalAlign,

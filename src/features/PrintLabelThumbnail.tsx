@@ -1,9 +1,9 @@
 import type { CSSProperties } from 'react';
-import { MM_TO_PX, solveLabelTextLayout } from '../domain/layout';
+import { MM_TO_PX } from '../domain/layout';
 import type { LabelRecord, SizePreset } from '../domain/labels';
 import { resolvePrintArea } from '../domain/placement';
-import { rotationTransform, type PrintRotation } from '../domain/printRotation';
-import { StyledTextLine } from './StyledText';
+import type { PrintRotation } from '../domain/printRotation';
+import PrintTextLayer from './PrintTextLayer';
 
 interface PrintLabelThumbnailProps {
   label: LabelRecord;
@@ -15,7 +15,6 @@ const THUMBNAIL_WIDTH_PX = 150;
 
 export default function PrintLabelThumbnail({ label, preset, rotation }: PrintLabelThumbnailProps) {
   const appliedRotation = label.contentType === 'text' ? rotation : 0;
-  const layout = label.contentType === 'text' ? solveLabelTextLayout(label, preset, appliedRotation) : null;
   const printArea = resolvePrintArea(label.printArea, preset);
   const previewScale = THUMBNAIL_WIDTH_PX / (preset.widthMm * MM_TO_PX);
   const paperStyle: CSSProperties = {
@@ -39,29 +38,13 @@ export default function PrintLabelThumbnail({ label, preset, rotation }: PrintLa
       }}>
         {label.contentType === 'image' && label.imageFallback
           ? <img src={label.imageFallback} alt="" />
-          : label.textLines.map((line, lineIndex) => {
-            const lineLayout = layout?.lineLayouts?.[line.id];
-            const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
-            return <span className="print-label-thumbnail-text" key={line.id} style={{
-              left: `${line.placement.xPercent}%`,
-              top: `${line.placement.yPercent}%`,
-              transform: rotationTransform(line.placement, appliedRotation),
-              textAlign: label.style.horizontalAlign,
-              whiteSpace: 'nowrap',
-              writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
-              fontFamily: line.style.fontFamily,
-              fontSize: `${renderedFontSize * (96 / 72) * previewScale}px`,
-              fontWeight: line.style.fontWeight,
-              fontStyle: line.style.italic ? 'italic' : undefined,
-              textDecoration: line.style.underline ? 'underline' : undefined,
-            }}><StyledTextLine
-              label={label}
-              line={line}
-              lineIndex={lineIndex}
-              previewScale={previewScale}
-              fontScale={lineLayout?.fontScale}
-            /></span>;
-          })}
+          : <PrintTextLayer
+            label={label}
+            preset={preset}
+            rotation={appliedRotation}
+            lineClassName="print-label-thumbnail-text"
+            previewScale={previewScale}
+          />}
       </div>
     </div>
   );

@@ -10,7 +10,6 @@ import {
 } from '../src/domain/labels';
 import { parseQuantity } from '../src/domain/quantity';
 import { getPreviewScale, solveLabelTextLayout, solveTextLayout, validateLabelForPrint } from '../src/domain/layout';
-import { rotationSwapsAxes } from '../src/domain/printRotation';
 
 describe('Excel 表头识别', () => {
   it('规范化后识别含“唛头”与“数量/件数”的表头', () => {
@@ -192,72 +191,6 @@ describe('唛头排版', () => {
 
     expect(plainResult.ok && plainResult.lineLayouts[plain.textLines[0].id].fontSizePt).toBe(38);
     expect(italicResult.ok && italicResult.lineLayouts[italic.textLines[0].id].fontSizePt).toBeLessThan(38);
-  });
-
-  it('旋转 90 或 270 度时交换文字的可用轴', () => {
-    expect([0, 90, 180, 270].map((rotation) => rotationSwapsAxes(rotation as 0 | 90 | 180 | 270)))
-      .toEqual([false, true, false, true]);
-  });
-
-  it('非居中锚点在 90 与 270 度旋转下使用相同的旋转边界', () => {
-    const label = createLabel({
-      content: 'MMMM',
-      quantity: 1,
-      source: 'manual',
-      needsReview: false,
-      printArea: { leftMm: 25, topMm: 15, widthMm: 50, heightMm: 30 },
-    });
-    label.style.fontSizePt = 48;
-    label.style.fontWeight = 400;
-    label.textLines[0].placement = {
-      xPercent: 25,
-      yPercent: 70,
-      horizontalSnap: 'free',
-      verticalSnap: 'free',
-    };
-
-    const clockwise = solveLabelTextLayout(label, defaultSizePresets[0], 90);
-    const counterClockwise = solveLabelTextLayout(label, defaultSizePresets[0], 270);
-
-    expect(clockwise.ok).toBe(true);
-    expect(counterClockwise.ok).toBe(true);
-    expect(clockwise.ok && clockwise.lineLayouts[label.textLines[0].id].fontSizePt).toBe(13);
-    expect(counterClockwise.ok && counterClockwise.lineLayouts[label.textLines[0].id])
-      .toEqual(clockwise.ok && clockwise.lineLayouts[label.textLines[0].id]);
-  });
-
-  it.each([90, 270] as const)('按实际 CSS 中心旋转包围盒阻止 %i° 的四边吸附溢出', (rotation) => {
-    const edgeCases = [
-      {
-        orientation: 'vertical' as const,
-        placement: { xPercent: 0, yPercent: 50, horizontalSnap: 'left' as const, verticalSnap: 'middle' as const },
-      },
-      {
-        orientation: 'vertical' as const,
-        placement: { xPercent: 100, yPercent: 50, horizontalSnap: 'right' as const, verticalSnap: 'middle' as const },
-      },
-      {
-        orientation: 'horizontal' as const,
-        placement: { xPercent: 50, yPercent: 0, horizontalSnap: 'center' as const, verticalSnap: 'top' as const },
-      },
-      {
-        orientation: 'horizontal' as const,
-        placement: { xPercent: 50, yPercent: 100, horizontalSnap: 'center' as const, verticalSnap: 'bottom' as const },
-      },
-    ];
-
-    const results = edgeCases.map(({ orientation, placement }) => {
-      const label = createLabel({ content: 'MMMM', quantity: 1, source: 'manual', needsReview: false });
-      label.textLines[0].textOrientation = orientation;
-      label.textLines[0].placement = placement;
-      return solveLabelTextLayout(label, defaultSizePresets[0], rotation);
-    });
-
-    const overflow = expect.objectContaining({
-      ok: false,
-      error: '内容在最小字号下仍无法完整显示',
-    });
-    expect(results).toEqual([overflow, overflow, overflow, overflow]);
   });
 
   it('最小字号仍无法容纳时保持打印阻断', () => {

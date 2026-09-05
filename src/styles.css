@@ -526,7 +526,6 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .print-label-preview-copy > span { color: var(--color-muted); font-size: .68rem; }
 .print-rotation-control { display: flex; align-items: center; gap: .5rem; }
 .print-rotation-control span { color: var(--color-muted); font: 700 .68rem Bahnschrift,Consolas,monospace; }
-.print-label-preview-copy .print-rotation-error { color: var(--color-danger); font-weight: 700; line-height: 1.4; }
 .print-root { display: none; }
 
 @media (max-width: 720px) {

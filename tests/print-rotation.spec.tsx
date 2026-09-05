@@ -2,19 +2,12 @@
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { createLabel, defaultSizePresets, type TextPlacement } from '../src/domain/labels';
-import { nextPrintRotation, rotationTransform } from '../src/domain/printRotation';
+import { createLabel, defaultSizePresets } from '../src/domain/labels';
+import { getPrintRotationScale, nextPrintRotation } from '../src/domain/printRotation';
 import { createPrintPlan } from '../src/domain/printing';
 import PrintPages from '../src/features/PrintPages';
 import PrintLabelThumbnail from '../src/features/PrintLabelThumbnail';
 import PrintReviewDialog from '../src/features/PrintReviewDialog';
-
-const centerPlacement: TextPlacement = {
-  xPercent: 50,
-  yPercent: 50,
-  horizontalSnap: 'center',
-  verticalSnap: 'middle',
-};
 
 const textLabel = (content: string, quantity = 1) => createLabel({
   content,
@@ -33,17 +26,11 @@ describe('打印文字旋转', () => {
     ]).toEqual([90, 180, 270, 0]);
   });
 
-  it('保留吸附点平移并把旋转追加在变换末尾', () => {
-    const cases: Array<[TextPlacement, 90 | 270, string]> = [
-      [{ ...centerPlacement, horizontalSnap: 'left', verticalSnap: 'top' }, 90, 'translate(0%, 0%) rotate(90deg)'],
-      [{ ...centerPlacement, horizontalSnap: 'right', verticalSnap: 'bottom' }, 90, 'translate(-100%, -100%) rotate(90deg)'],
-      [{ ...centerPlacement, horizontalSnap: 'left', verticalSnap: 'bottom' }, 270, 'translate(0%, -100%) rotate(270deg)'],
-      [{ ...centerPlacement, horizontalSnap: 'right', verticalSnap: 'top' }, 270, 'translate(-100%, 0%) rotate(270deg)'],
-    ];
-
-    expect(cases.map(([placement, rotation]) => rotationTransform(placement, rotation)))
-      .toEqual(cases.map(([, , expected]) => expected));
-    expect(rotationTransform(centerPlacement, 90)).toBe('translate(-50%, -50%) rotate(90deg)');
+  it('90 或 270 度统一缩小整个内容层以适配原打印区域', () => {
+    expect(getPrintRotationScale(62, 37, 0)).toBe(1);
+    expect(getPrintRotationScale(62, 37, 90)).toBeCloseTo(37 / 62);
+    expect(getPrintRotationScale(62, 37, 180)).toBe(1);
+    expect(getPrintRotationScale(62, 37, 270)).toBeCloseTo(37 / 62);
   });
 
   it('为每个不同文字唛头显示一个缩略图和唯一旋转控制，图片不显示旋转按钮', () => {
@@ -76,16 +63,26 @@ describe('打印文字旋转', () => {
     expect(html).not.toContain('旋转第 3 个文字唛头');
   });
 
-  it('实际打印旋转文字但保持纸张宽高顺序不变', () => {
-    const label = textLabel('A');
+  it('实际打印只旋转一次整个文字层并保持纸张尺寸和逐行坐标不变', () => {
+    const created = textLabel('1546\n4548');
+    const label = {
+      ...created,
+      textLines: created.textLines.map((line) => ({ ...line, style: { ...line.style, fontSizePt: 12 } })),
+    };
     const group = createPrintPlan([label], defaultSizePresets).groups[0];
     const html = renderToStaticMarkup(<PrintPages group={group} rotations={{ [label.id]: 90 }} />);
 
     expect(html).toContain(`@page { size: ${group.widthMm}mm ${group.heightMm}mm; margin: 0; }`);
-    expect(html).toContain('transform:translate(-50%, -50%) rotate(90deg)');
+    expect(html.match(/rotate\(90deg\)/g)).toHaveLength(1);
+    expect(html).toContain('transform:rotate(90deg) scale(0.596774)');
+    expect(html).toContain(`left:${label.textLines[0].placement.xPercent}%`);
+    expect(html).toContain(`top:${label.textLines[0].placement.yPercent}%`);
+    expect(html).toContain(`left:${label.textLines[1].placement.xPercent}%`);
+    expect(html).toContain(`top:${label.textLines[1].placement.yPercent}%`);
+    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(2);
   });
 
-  it('旋转后最小字号仍溢出时显示原因并禁止打印该组', () => {
+  it('旋转后统一缩小整个内容层并保持该组可打印', () => {
     const label = textLabel('MMMMMMMMMMMMMMM');
     const plan = createPrintPlan([label], defaultSizePresets);
     expect(plan.blockers).toEqual([]);
@@ -99,10 +96,9 @@ describe('打印文字旋转', () => {
       onPrintGroup={() => undefined}
     />);
 
-    expect(html).toContain('内容在最小字号下仍无法完整显示');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>打印这一组<\/button>/);
-    expect(html).toContain('旋转后内容需要调整');
-    expect(html).not.toContain('可以打印');
+    expect(html).toContain('transform:rotate(90deg) scale(0.596774)');
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>打印这一组<\/button>/);
+    expect(html).toContain('共 1 张，可以打印');
   });
 
   it('不同尺寸组使用重复摘要时仍提供全局唯一的旋转名称', () => {
@@ -136,5 +132,21 @@ describe('打印文字旋转', () => {
     expect(html).toContain('class="print-label-thumbnail"');
     expect(html).toContain('width:150px');
     expect(html).toContain('aspect-ratio:70 / 45');
+  });
+
+  it('缩略图和实际打印一样只旋转一次整个文字层', () => {
+    const created = textLabel('1546\n4548');
+    const label = {
+      ...created,
+      textLines: created.textLines.map((line) => ({ ...line, style: { ...line.style, fontSizePt: 12 } })),
+    };
+    const html = renderToStaticMarkup(<PrintLabelThumbnail
+      label={label}
+      preset={defaultSizePresets[1]}
+      rotation={90}
+    />);
+
+    expect(html.match(/rotate\(90deg\)/g)).toHaveLength(1);
+    expect(html.match(/transform:translate\(-50%, -50%\)/g)).toHaveLength(2);
   });
 });

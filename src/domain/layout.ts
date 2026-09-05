@@ -2,7 +2,6 @@ import { clampFontSizePt, MAX_FONT_SIZE_PT, MIN_FONT_SIZE_PT, type LabelRecord, 
 import { buildStyledSegments } from './richText';
 import { resolvePrintArea } from './placement';
 import { MAX_LABEL_QUANTITY } from './quantity';
-import { rotationSwapsAxes, type PrintRotation } from './printRotation';
 
 export interface LayoutInput {
   content: string;
@@ -129,13 +128,9 @@ function scaledLineRect(
   fontScale: number,
   width: number,
   height: number,
-  rotation: PrintRotation,
 ) {
   const line = label.textLines[lineIndex];
   const measured = scaledLineDimensions(label, lineIndex, baseFontSizePt, fontScale);
-  const rotatedDimensions = rotationSwapsAxes(rotation)
-    ? { width: measured.height, height: measured.width }
-    : measured;
   const anchorX = width * (Math.max(0, Math.min(100, line.placement.xPercent)) / 100);
   const anchorY = height * (Math.max(0, Math.min(100, line.placement.yPercent)) / 100);
   const translateX = line.placement.horizontalSnap === 'left'
@@ -144,16 +139,15 @@ function scaledLineRect(
   const translateY = line.placement.verticalSnap === 'top'
     ? 0
     : line.placement.verticalSnap === 'bottom' ? -measured.height : -measured.height / 2;
-  // CSS keeps the original snap translation, then rotates the box around its default center origin.
-  const rotatedCenterX = anchorX + measured.width / 2 + translateX;
-  const rotatedCenterY = anchorY + measured.height / 2 + translateY;
-  const left = rotatedCenterX - rotatedDimensions.width / 2;
-  const top = rotatedCenterY - rotatedDimensions.height / 2;
+  const centerX = anchorX + measured.width / 2 + translateX;
+  const centerY = anchorY + measured.height / 2 + translateY;
+  const left = centerX - measured.width / 2;
+  const top = centerY - measured.height / 2;
   return {
     left,
     top,
-    right: left + rotatedDimensions.width,
-    bottom: top + rotatedDimensions.height,
+    right: left + measured.width,
+    bottom: top + measured.height,
   };
 }
 
@@ -161,11 +155,7 @@ function scaledRectFitsBounds(rect: ReturnType<typeof scaledLineRect>, width: nu
   return rect.left >= 0 && rect.top >= 0 && rect.right <= width && rect.bottom <= height;
 }
 
-export function solveLabelTextLayout(
-  label: LabelRecord,
-  preset: SizePreset,
-  rotation: PrintRotation = 0,
-): LabelLayoutResult {
+export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): LabelLayoutResult {
   const printArea = resolvePrintArea(label.printArea, preset);
   const width = Math.max(1, printArea.widthMm * MM_TO_PX);
   const height = Math.max(1, printArea.heightMm * MM_TO_PX);
@@ -180,7 +170,7 @@ export function solveLabelTextLayout(
     const requested = requestedLineSize(label, index);
     const resolved = fontSizeCandidates(requested, preset.minFontSize).find((candidate) => {
       const fontScale = candidate / requested;
-      const rect = scaledLineRect(label, index, candidate, fontScale, width, height, rotation);
+      const rect = scaledLineRect(label, index, candidate, fontScale, width, height);
       return scaledRectFitsBounds(rect, width, height);
     });
     if (resolved === undefined) {
@@ -194,7 +184,7 @@ export function solveLabelTextLayout(
     }
     const fontScale = resolved / requested;
     lineLayouts[label.textLines[index].id] = { fontSizePt: resolved, fontScale };
-    rects.push(scaledLineRect(label, index, resolved, fontScale, width, height, rotation));
+    rects.push(scaledLineRect(label, index, resolved, fontScale, width, height));
   }
 
   const fontSize = printableLineIndexes.length > 0

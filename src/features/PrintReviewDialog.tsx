@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { solveLabelTextLayout } from '../domain/layout';
 import type { PrintGroup, PrintPlan } from '../domain/printing';
 import type { PrintRotation } from '../domain/printRotation';
 import PrintLabelThumbnail from './PrintLabelThumbnail';
@@ -16,14 +15,6 @@ interface PrintReviewDialogProps {
 
 function getUniquePages(group: PrintGroup) {
   return Array.from(new Map(group.pages.map((page) => [page.label.id, page])).values());
-}
-
-function getRotationErrors(group: PrintGroup, rotations: Record<string, PrintRotation>) {
-  return getUniquePages(group).flatMap(({ label, preset }) => {
-    if (label.contentType !== 'text') return [];
-    const layout = solveLabelTextLayout(label, preset, rotations[label.id] ?? 0);
-    return layout.ok ? [] : [{ labelId: label.id, error: layout.error }];
-  });
 }
 
 export async function copyPaperSizeToClipboard(
@@ -98,17 +89,10 @@ export default function PrintReviewDialog({
   const groupPreviews = plan.groups.map((group) => ({
     group,
     uniquePages: getUniquePages(group),
-    rotationErrors: getRotationErrors(group, rotations),
   }));
-  const hasRotationBlockers = groupPreviews.some(({ rotationErrors }) => rotationErrors.length > 0);
-  const printableCopies = groupPreviews.reduce((total, { group, rotationErrors }) => (
-    rotationErrors.length > 0 ? total : total + group.pages.length
-  ), 0);
   const title = blocked
     ? '还有内容需要处理'
-    : hasRotationBlockers
-      ? printableCopies === 0 ? '旋转后内容需要调整' : `仍有 ${printableCopies} 张可以打印`
-      : `共 ${plan.totalCopies} 张，可以打印`;
+    : `共 ${plan.totalCopies} 张，可以打印`;
   return (
     <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="print-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="print-dialog-title">
@@ -137,9 +121,7 @@ export default function PrintReviewDialog({
           </div>
         ) : (
           <div className="print-groups">
-            <p>{hasRotationBlockers
-              ? '旋转后超出范围的尺寸组暂不能打印，请调整角度后再继续。'
-              : '不同实际尺寸会分开打印。请按下方顺序，在打印机中换好对应规格的纸张。'}</p>
+            <p>不同实际尺寸会分开打印。请按下方顺序，在打印机中换好对应规格的纸张。</p>
             <aside className="print-copy-rule" aria-label="打印份数规则">
               <strong>系统打印份数保持 1</strong>
               <span>程序已经按录入数量生成打印页，请勿在系统窗口重复增加份数。</span>
@@ -149,13 +131,12 @@ export default function PrintReviewDialog({
               <ol>
                 <li>打开“打印机首选项”，创建与下方完全相同的用户自定义纸张。</li>
                 <li>在系统打印窗口选择该纸张，缩放保持 100%，边距选择“无”。</li>
-                <li>在这里旋转文字；系统打印窗口保持所示自定义纸张方向，不要交换宽高。</li>
+                <li>在这里旋转整组文字；系统打印窗口保持所示自定义纸张方向，不要交换宽高。</li>
                 <li>不要选择 A4 或信纸代替，否则内容会缩放或产生大片留白。</li>
               </ol>
             </aside>
             <p className="print-copy-feedback" role="status" aria-live="polite">{copyStatus}</p>
-            {groupPreviews.map(({ group, uniquePages, rotationErrors }, index) => {
-              const rotationErrorById = new Map(rotationErrors.map((item) => [item.labelId, item.error]));
+            {groupPreviews.map(({ group, uniquePages }, index) => {
               return (
                 <article key={group.key}>
                   <span className="print-group-index">{String(index + 1).padStart(2, '0')}</span>
@@ -175,7 +156,6 @@ export default function PrintReviewDialog({
                     <button
                       className="button button-print"
                       type="button"
-                      disabled={rotationErrors.length > 0}
                       onClick={() => onPrintGroup(group)}
                     >
                       打印这一组
@@ -185,7 +165,6 @@ export default function PrintReviewDialog({
                     {uniquePages.map(({ label, preset }, labelIndex) => {
                       const rotation = label.contentType === 'text' ? rotations[label.id] ?? 0 : 0;
                       const summary = label.content.trim().split(/\r?\n/)[0] || '未填写内容';
-                      const error = rotationErrorById.get(label.id);
                       return (
                         <div className="print-label-preview-row" key={label.id}>
                           <PrintLabelThumbnail label={label} preset={preset} rotation={rotation} />
@@ -202,7 +181,6 @@ export default function PrintReviewDialog({
                                 <span>当前 {rotation}°</span>
                               </div>
                             ) : <span>图片保持原方向</span>}
-                            {error && <span className="print-rotation-error" role="alert">{error}</span>}
                           </div>
                         </div>
                       );
