@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialDraft } from '../src/domain/draft';
+import { createLabel } from '../src/domain/labels';
 import {
   canRedo,
   canUndo,
@@ -66,6 +67,38 @@ describe('draft history', () => {
     expect(undone.present.labels[0].quantity).toBe(1);
     expect(undone.present.selectedLabelIds).toEqual([labelId]);
     expect(draftHistoryReducer(undone, { type: 'redo' }).present.selectedLabelIds).toEqual([labelId]);
+  });
+
+  it('normalizes relative selection after a recorded action changed snapshot selection', () => {
+    const base = createInitialDraft();
+    const firstId = base.labels[0].id;
+    const initial = { ...base, selectedLabelIds: [firstId] };
+    const inserted = createLabel({
+      content: 'B',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    });
+    const withInserted = draftHistoryReducer(createDraftHistory(initial), {
+      type: 'apply',
+      actions: [{ type: 'insert-labels', labels: [inserted], afterId: firstId }],
+      description: '插入唛头',
+      record: true,
+    });
+    const synchronized = draftHistoryReducer(withInserted, {
+      type: 'apply',
+      actions: [
+        { type: 'toggle-selected', id: firstId },
+        { type: 'remember-printed-size', widthMm: 88, heightMm: 44 },
+      ],
+      description: '同步辅助状态',
+      record: false,
+    });
+
+    expect(synchronized.present.selectedLabelIds).toEqual([inserted.id, firstId]);
+    const undone = draftHistoryReducer(synchronized, { type: 'undo' });
+    expect(undone.present.selectedLabelIds).toEqual([firstId]);
+    expect(undone.present.lastPrintedSize).toEqual({ widthMm: 88, heightMm: 44 });
   });
 
   it('bounds recorded history to the latest 100 edits', () => {

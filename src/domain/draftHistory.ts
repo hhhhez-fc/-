@@ -37,15 +37,23 @@ export function draftHistoryReducer(
       const present = applyActions(history.present, event.actions);
       if (present === history.present) return history;
       if (!event.record) {
+        const snapshotActions: DraftAction[] = event.actions.some(({ type }) => (
+          type === 'toggle-selected' || type === 'set-selected'
+        ))
+          ? [
+            ...event.actions.filter(({ type }) => type !== 'toggle-selected' && type !== 'set-selected'),
+            { type: 'set-selected', ids: present.selectedLabelIds },
+          ]
+          : event.actions;
         return {
           past: history.past.map((snapshot) => ({
             ...snapshot,
-            state: applyActions(snapshot.state, event.actions),
+            state: applyActions(snapshot.state, snapshotActions),
           })),
           present,
           future: history.future.map((snapshot) => ({
             ...snapshot,
-            state: applyActions(snapshot.state, event.actions),
+            state: applyActions(snapshot.state, snapshotActions),
           })),
           lastTransition: { kind: 'apply', description: event.description },
         };
