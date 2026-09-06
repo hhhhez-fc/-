@@ -145,6 +145,9 @@ export type DraftAction =
   | { type: 'toggle-selected'; id: string }
   | { type: 'set-selected'; ids: string[] }
   | { type: 'apply-style-to-selected'; style: LabelStyle }
+  | { type: 'insert-labels'; labels: LabelRecord[]; afterId: string | null }
+  | { type: 'move-labels'; ids: string[]; afterId: string | null }
+  | { type: 'delete-labels'; ids: string[] }
   | { type: 'delete-label'; id: string }
   | { type: 'duplicate-label'; id: string }
   | { type: 'add-size-preset'; preset: SizePreset }
@@ -221,19 +224,44 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
           : label),
       };
     }
-    case 'delete-label': {
-      const removedIndex = state.labels.findIndex((label) => label.id === action.id);
-      if (removedIndex < 0) return state;
-      const labels = state.labels.filter((label) => label.id !== action.id);
-      const nextActive = state.activeLabelId === action.id
-        ? labels[Math.min(removedIndex, labels.length - 1)]?.id ?? null
-        : state.activeLabelId;
+    case 'insert-labels': {
+      if (action.labels.length === 0) return state;
+      const labels = [...state.labels];
+      const afterIndex = action.afterId === null
+        ? labels.length - 1
+        : labels.findIndex(({ id }) => id === action.afterId);
+      labels.splice(afterIndex < 0 ? labels.length : afterIndex + 1, 0, ...action.labels);
+      const insertedIds = action.labels.map(({ id }) => id);
+      return { ...state, labels, activeLabelId: insertedIds[0], selectedLabelIds: insertedIds };
+    }
+    case 'move-labels': {
+      const movingIds = new Set(action.ids);
+      const moving = state.labels.filter(({ id }) => movingIds.has(id));
+      if (moving.length === 0 || moving.length !== movingIds.size) return state;
+      if (action.afterId && movingIds.has(action.afterId)) return state;
+      const remaining = state.labels.filter(({ id }) => !movingIds.has(id));
+      const afterIndex = action.afterId === null
+        ? remaining.length - 1
+        : remaining.findIndex(({ id }) => id === action.afterId);
+      remaining.splice(afterIndex < 0 ? remaining.length : afterIndex + 1, 0, ...moving);
+      return { ...state, labels: remaining, activeLabelId: moving[0].id, selectedLabelIds: moving.map(({ id }) => id) };
+    }
+    case 'delete-labels': {
+      const ids = new Set(action.ids);
+      const firstRemovedIndex = state.labels.findIndex(({ id }) => ids.has(id));
+      if (firstRemovedIndex < 0) return state;
+      const labels = state.labels.filter(({ id }) => !ids.has(id));
       return {
         ...state,
         labels,
-        activeLabelId: nextActive,
-        selectedLabelIds: state.selectedLabelIds.filter((id) => id !== action.id),
+        activeLabelId: state.activeLabelId && ids.has(state.activeLabelId)
+          ? labels[Math.min(firstRemovedIndex, labels.length - 1)]?.id ?? null
+          : state.activeLabelId,
+        selectedLabelIds: state.selectedLabelIds.filter((id) => !ids.has(id)),
       };
+    }
+    case 'delete-label': {
+      return draftReducer(state, { type: 'delete-labels', ids: [action.id] });
     }
     case 'duplicate-label': {
       const sourceIndex = state.labels.findIndex((label) => label.id === action.id);

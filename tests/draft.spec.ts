@@ -238,6 +238,39 @@ describe('草稿状态', () => {
     expect(next.selectedLabelIds).toEqual([]);
   });
 
+  it('inserts labels after the active record and selects the inserted records', () => {
+    const first = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false });
+    const second = createLabel({ content: 'B', quantity: 1, source: 'manual', needsReview: false });
+    const pasted = createLabel({ content: 'COPY', quantity: 1, source: 'manual', needsReview: false });
+    const state = { ...createInitialDraft(), labels: [first, second], activeLabelId: first.id };
+
+    const next = draftReducer(state, { type: 'insert-labels', labels: [pasted], afterId: first.id });
+
+    expect(next.labels.map(({ content }) => content)).toEqual(['A', 'COPY', 'B']);
+    expect(next.activeLabelId).toBe(pasted.id);
+    expect(next.selectedLabelIds).toEqual([pasted.id]);
+  });
+
+  it('moves several labels as one ordered block and rejects an invalid destination', () => {
+    const labels = ['A', 'B', 'C'].map((content) => createLabel({ content, quantity: 1, source: 'manual', needsReview: false }));
+    const state = { ...createInitialDraft(), labels, activeLabelId: labels[2].id };
+
+    const moved = draftReducer(state, { type: 'move-labels', ids: [labels[0].id, labels[1].id], afterId: labels[2].id });
+    expect(moved.labels.map(({ content }) => content)).toEqual(['C', 'A', 'B']);
+    expect(moved.selectedLabelIds).toEqual([labels[0].id, labels[1].id]);
+    expect(draftReducer(state, { type: 'move-labels', ids: [labels[0].id], afterId: labels[0].id })).toBe(state);
+  });
+
+  it('deletes selected records atomically and chooses the nearest active record', () => {
+    const labels = ['A', 'B', 'C'].map((content) => createLabel({ content, quantity: 1, source: 'manual', needsReview: false }));
+    const state = { ...createInitialDraft(), labels, activeLabelId: labels[1].id, selectedLabelIds: [labels[0].id, labels[1].id] };
+
+    const next = draftReducer(state, { type: 'delete-labels', ids: [labels[0].id, labels[1].id] });
+    expect(next.labels).toEqual([labels[2]]);
+    expect(next.activeLabelId).toBe(labels[2].id);
+    expect(next.selectedLabelIds).toEqual([]);
+  });
+
   it('复制记录时生成新标识并把副本设为当前记录', () => {
     const label = createLabel({ content: 'A', quantity: 2, source: 'manual', needsReview: false });
     const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
