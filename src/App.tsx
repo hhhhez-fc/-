@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { createInitialDraft, draftReducer, resolveDefaultNewLabelPreset, type DraftState } from './domain/draft';
+import { createInitialDraft, resolveDefaultNewLabelPreset, type DraftAction, type DraftState } from './domain/draft';
+import {
+  canRedo,
+  canUndo,
+  createDraftHistory,
+  draftHistoryReducer,
+} from './domain/draftHistory';
 import { createLabel, defaultSizeTypeForBusiness, type LabelPurpose } from './domain/labels';
 import { recoverDraft, saveDraftSafely } from './domain/storage';
 import LabelEditor from './features/LabelEditor';
@@ -33,9 +39,12 @@ interface AppProps {
 }
 
 export default function App({ initialState }: AppProps) {
-  const [state, dispatch] = useReducer(draftReducer, initialState, (provided) => provided ?? (
-    typeof window === 'undefined' ? createInitialDraft() : recoverDraft(() => window.localStorage)
+  const [history, historyDispatch] = useReducer(draftHistoryReducer, initialState, (provided) => (
+    createDraftHistory(provided ?? (
+      typeof window === 'undefined' ? createInitialDraft() : recoverDraft(() => window.localStorage)
+    ))
   ));
+  const state = history.present;
   const [status, setStatus] = useState('草稿仅保存在这台电脑');
   const [confirmation, setConfirmation] = useState<null | {
     title: string;
@@ -56,6 +65,18 @@ export default function App({ initialState }: AppProps) {
   const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
     event.preventDefault();
     event.returnValue = '';
+  }, []);
+  const applyDraft = useCallback((
+    actions: DraftAction | DraftAction[],
+    description: string,
+    record = true,
+  ) => {
+    historyDispatch({
+      type: 'apply',
+      actions: Array.isArray(actions) ? actions : [actions],
+      description,
+      record,
+    });
   }, []);
   const activeLabel = state.labels.find((label) => label.id === state.activeLabelId) ?? null;
   const activePreset = useMemo(
@@ -128,9 +149,6 @@ export default function App({ initialState }: AppProps) {
 
   const addManualLabel = () => {
     const sizeType = defaultSizeTypeForBusiness(state.business);
-    if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
-      dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
-    }
     const label = createLabel({
       content: '',
       quantity: 1,
@@ -144,7 +162,12 @@ export default function App({ initialState }: AppProps) {
     });
     clearLineSelection();
     setActiveLineId(null);
-    dispatch({ type: 'add-label', label });
+    applyDraft([
+      ...(!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)
+        ? [{ type: 'add-size-preset' as const, preset: defaultNewLabelPreset }]
+        : []),
+      { type: 'add-label', label },
+    ], '新增手动唛头');
     setStatus('已新增一条手动唛头');
   };
 
@@ -168,16 +191,16 @@ export default function App({ initialState }: AppProps) {
   const activateLabel = useCallback((id: string) => {
     setSelectedLineIds([]);
     setActiveLineId(null);
-    dispatch({ type: 'set-active-label', id });
-  }, []);
+    applyDraft({ type: 'set-active-label', id }, '切换当前唛头', false);
+  }, [applyDraft]);
   const duplicateLabel = useCallback((id: string) => {
     clearLineSelection();
     setActiveLineId(null);
-    dispatch({ type: 'duplicate-label', id });
-  }, [clearLineSelection]);
+    applyDraft({ type: 'duplicate-label', id }, '复制唛头');
+  }, [applyDraft, clearLineSelection]);
   const deleteLabel = (id: string) => {
     if (id === state.activeLabelId) clearLineSelection();
-    dispatch({ type: 'delete-label', id });
+    applyDraft({ type: 'delete-label', id }, '删除唛头');
     setStatus('已删除一条唛头');
   };
 
@@ -191,12 +214,14 @@ export default function App({ initialState }: AppProps) {
       restored.preset.id = crypto.randomUUID();
       restored.label.sizePresetId = restored.preset.id;
     }
-    if (!presetMatchesSnapshot) {
-      dispatch({ type: 'add-size-preset', preset: restored.preset });
-    }
     clearLineSelection();
     setActiveLineId(null);
-    dispatch({ type: 'add-label', label: restored.label });
+    applyDraft([
+      ...(!presetMatchesSnapshot
+        ? [{ type: 'add-size-preset' as const, preset: restored.preset }]
+        : []),
+      { type: 'add-label', label: restored.label },
+    ], '从使用记录新增唛头');
     setStatus('已从使用记录新增一条唛头');
   };
 
@@ -211,13 +236,29 @@ export default function App({ initialState }: AppProps) {
       return [{ label, preset }];
     });
     if (entries.length > 0) {
-      dispatch({ type: 'record-recent-labels', entries, previewedAt: Date.now() });
+      applyDraft(
+        { type: 'record-recent-labels', entries, previewedAt: Date.now() },
+        '记录最近使用的唛头',
+        false,
+      );
     }
   };
   const openActivePrintPreview = () => {
     if (!activeLabel || activeReviewErrors.length > 0) return;
     recordPrintableLabels([activeLabel.id]);
     setPrintDialogOpen(true);
+  };
+  const undoDraft = () => {
+    const description = history.past.at(-1)?.description;
+    if (!description) return;
+    historyDispatch({ type: 'undo' });
+    setStatus(`已撤销：${description}`);
+  };
+  const redoDraft = () => {
+    const description = history.future.at(-1)?.description;
+    if (!description) return;
+    historyDispatch({ type: 'redo' });
+    setStatus(`已重做：${description}`);
   };
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
     intake: <>
@@ -234,7 +275,10 @@ export default function App({ initialState }: AppProps) {
           <span>业务类型</span>
           <input
             value={state.business}
-            onChange={(event) => dispatch({ type: 'set-business', business: event.target.value })}
+            onChange={(event) => applyDraft(
+              { type: 'set-business', business: event.target.value },
+              '修改业务类型',
+            )}
             placeholder="例如：义乌铺、外贸"
           />
           <small>义乌铺默认大唛头，其他业务默认小唛头。</small>
@@ -244,7 +288,10 @@ export default function App({ initialState }: AppProps) {
           <span>唛头用途</span>
           <select
             value={state.purpose}
-            onChange={(event) => dispatch({ type: 'set-purpose', purpose: event.target.value as LabelPurpose })}
+            onChange={(event) => applyDraft(
+              { type: 'set-purpose', purpose: event.target.value as LabelPurpose },
+              '修改唛头用途',
+            )}
           >
             <option value="carton">外箱唛头</option>
             <option value="envelope">信封唛头</option>
@@ -257,12 +304,14 @@ export default function App({ initialState }: AppProps) {
           sizePresetId={defaultNewLabelPreset.id}
           purpose={state.purpose}
           onImport={(labels) => {
-            if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
-              dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
-            }
             clearLineSelection();
             setActiveLineId(null);
-            dispatch({ type: 'import-labels', labels });
+            applyDraft([
+              ...(!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)
+                ? [{ type: 'add-size-preset' as const, preset: defaultNewLabelPreset }]
+                : []),
+              { type: 'import-labels', labels },
+            ], '导入 Excel 唛头');
           }}
           onStatus={setStatus}
         />
@@ -270,12 +319,14 @@ export default function App({ initialState }: AppProps) {
           sizePresetId={defaultNewLabelPreset.id}
           purpose={state.purpose}
           onImport={(labels) => {
-            if (!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)) {
-              dispatch({ type: 'add-size-preset', preset: defaultNewLabelPreset });
-            }
             clearLineSelection();
             setActiveLineId(null);
-            dispatch({ type: 'import-labels', labels });
+            applyDraft([
+              ...(!state.sizePresets.some((preset) => preset.id === defaultNewLabelPreset.id)
+                ? [{ type: 'add-size-preset' as const, preset: defaultNewLabelPreset }]
+                : []),
+              { type: 'import-labels', labels },
+            ], '导入图片唛头');
           }}
           onStatus={setStatus}
         />
@@ -316,8 +367,11 @@ export default function App({ initialState }: AppProps) {
           activeLabelId={state.activeLabelId}
           selectedLabelIds={state.selectedLabelIds}
           onActivate={activateLabel}
-          onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
-          onQuantityChange={(id, quantity) => dispatch({ type: 'update-label', id, patch: { quantity } })}
+          onToggleSelect={(id) => applyDraft({ type: 'toggle-selected', id }, '选择唛头', false)}
+          onQuantityChange={(id, quantity) => applyDraft(
+            { type: 'update-label', id, patch: { quantity } },
+            '修改打印数量',
+          )}
           onDuplicate={duplicateLabel}
           onDelete={deleteLabel}
         />
@@ -326,13 +380,20 @@ export default function App({ initialState }: AppProps) {
         <div className="bulk-toolbar" aria-label="批量操作">
           <span>{selectedCount ? `已选 ${selectedCount} 条` : '勾选后可批量应用样式'}</span>
           <div>
-            <button type="button" onClick={() => dispatch({ type: 'set-selected', ids: allSelected ? [] : state.labels.map((label) => label.id) })}>
+            <button type="button" onClick={() => applyDraft(
+              { type: 'set-selected', ids: allSelected ? [] : state.labels.map((label) => label.id) },
+              allSelected ? '取消全选唛头' : '全选唛头',
+              false,
+            )}>
               {allSelected ? '取消全选' : '全选'}
             </button>
             <button
               type="button"
               disabled={!activeLabel || selectedCount === 0}
-              onClick={() => activeLabel && dispatch({ type: 'apply-style-to-selected', style: activeLabel.style })}
+              onClick={() => activeLabel && applyDraft(
+                { type: 'apply-style-to-selected', style: activeLabel.style },
+                '批量应用当前样式',
+              )}
             >
               应用当前样式
             </button>
@@ -341,12 +402,15 @@ export default function App({ initialState }: AppProps) {
               disabled={selectedCount === 0}
               onClick={() => setConfirmation({
                 title: `删除选中的 ${selectedCount} 条唛头？`,
-                message: '删除后无法撤销，未选中的记录不受影响。',
+                message: '删除后可使用撤销恢复，未选中的记录不受影响。',
                 confirmLabel: '批量删除',
                 action: () => {
                   clearLineSelection();
                   setActiveLineId(null);
-                  state.selectedLabelIds.forEach((id) => dispatch({ type: 'delete-label', id }));
+                  applyDraft(
+                    { type: 'delete-labels', ids: state.selectedLabelIds },
+                    '批量删除唛头',
+                  );
                   setStatus(`已删除 ${selectedCount} 条唛头`);
                 },
               })}
@@ -363,7 +427,10 @@ export default function App({ initialState }: AppProps) {
           selectedLineIds={selectedLineIds}
           onActiveLineChange={activateLine}
           onSelectLine={selectLine}
-          onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
+          onChange={(patch) => applyDraft(
+            { type: 'update-label', id: activeLabel.id, patch },
+            '编辑唛头',
+          )}
           onPrintPreview={openActivePrintPreview}
           reviewErrors={activeReviewErrors}
           onDuplicate={() => duplicateLabel(activeLabel.id)}
@@ -391,8 +458,14 @@ export default function App({ initialState }: AppProps) {
           <SizeStylePanel
             label={activeLabel}
             presets={state.sizePresets}
-            onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
-            onPresetChange={(id, patch) => dispatch({ type: 'update-size-preset', id, patch })}
+            onChange={(patch) => applyDraft(
+              { type: 'update-label', id: activeLabel.id, patch },
+              '修改唛头样式',
+            )}
+            onPresetChange={(id, patch) => applyDraft(
+              { type: 'update-size-preset', id, patch },
+              '修改唛头尺寸',
+            )}
             onFontSizePreview={(choice) => setFontSizePreview(choice ? { labelId: activeLabel.id, choice } : null)}
           />
           <LabelPreview
@@ -403,7 +476,10 @@ export default function App({ initialState }: AppProps) {
             onActiveLineChange={activateLine}
             onSelectLine={selectLine}
             onClearLineSelection={clearLineSelection}
-            onChange={(patch) => dispatch({ type: 'update-label', id: activeLabel.id, patch })}
+            onChange={(patch) => applyDraft(
+              { type: 'update-label', id: activeLabel.id, patch },
+              '调整唛头布局',
+            )}
           />
         </>
       ) : (
@@ -431,18 +507,32 @@ export default function App({ initialState }: AppProps) {
         </div>
         <div className="header-actions">
           <span className="app-status" role="status" aria-live="polite">{status}</span>
+          <button
+            className="button button-quiet"
+            type="button"
+            aria-label="撤销上一步，Ctrl+Z"
+            disabled={!canUndo(history)}
+            onClick={undoDraft}
+          >撤销</button>
+          <button
+            className="button button-quiet"
+            type="button"
+            aria-label="重做上一步，Ctrl+Y"
+            disabled={!canRedo(history)}
+            onClick={redoDraft}
+          >重做</button>
           {state.labels.length > 0 && (
             <button
               className="button button-quiet"
               type="button"
               onClick={() => setConfirmation({
                 title: '清空当前草稿？',
-                message: `将删除 ${state.labels.length} 条唛头并新建一条空白唛头；最近打印尺寸会保留。此操作无法撤销。`,
+                message: `将删除 ${state.labels.length} 条唛头并新建一条空白唛头；最近打印尺寸会保留。清空后可使用撤销恢复。`,
                 confirmLabel: '清空草稿',
                 action: () => {
                   clearLineSelection();
                   setActiveLineId(null);
-                  dispatch({ type: 'clear-draft' });
+                  applyDraft({ type: 'clear-draft' }, '清空草稿');
                   setStatus('草稿已清空');
                 },
               })}
@@ -454,7 +544,7 @@ export default function App({ initialState }: AppProps) {
             className="button button-quiet"
             type="button"
             onClick={() => {
-              dispatch({ type: 'reset-workspace-layout' });
+              applyDraft({ type: 'reset-workspace-layout' }, '恢复默认工作区布局');
               setStatus('已恢复默认工作区布局');
             }}
           >恢复默认布局</button>
@@ -476,17 +566,29 @@ export default function App({ initialState }: AppProps) {
             size={state.workspaceLayout.sizes[id]}
             className={`${id}-panel`}
             dropPosition={panelDropTarget?.targetId === id ? panelDropTarget.position : undefined}
-            onDropAt={(sourceId, targetId, position) => dispatch({
-              type: 'set-panel-order',
-              order: placeWorkspacePanel(state.workspaceLayout, sourceId, targetId, position).order,
-            })}
+            onDropAt={(sourceId, targetId, position) => applyDraft(
+              {
+                type: 'set-panel-order',
+                order: placeWorkspacePanel(state.workspaceLayout, sourceId, targetId, position).order,
+              },
+              '调整工作区顺序',
+            )}
             onDragPreview={setPanelDropTarget}
-            onMove={(panelId, delta) => dispatch({
-              type: 'set-panel-order',
-              order: moveWorkspacePanel(state.workspaceLayout, panelId, delta).order,
-            })}
-            onResize={(panelId, patch) => dispatch({ type: 'resize-panel', id: panelId, patch })}
-            onToggleCollapse={(panelId) => dispatch({ type: 'toggle-panel-collapsed', id: panelId })}
+            onMove={(panelId, delta) => applyDraft(
+              {
+                type: 'set-panel-order',
+                order: moveWorkspacePanel(state.workspaceLayout, panelId, delta).order,
+              },
+              '调整工作区顺序',
+            )}
+            onResize={(panelId, patch) => applyDraft(
+              { type: 'resize-panel', id: panelId, patch },
+              '调整工作区板块大小',
+            )}
+            onToggleCollapse={(panelId) => applyDraft(
+              { type: 'toggle-panel-collapsed', id: panelId },
+              '切换工作区板块',
+            )}
           >
             {panelContents[id]}
           </WorkspacePanel>
@@ -515,7 +617,11 @@ export default function App({ initialState }: AppProps) {
         closePrintDialog();
       }}
       onPrintGroup={(group) => {
-        dispatch({ type: 'remember-printed-size', widthMm: group.widthMm, heightMm: group.heightMm });
+        applyDraft(
+          { type: 'remember-printed-size', widthMm: group.widthMm, heightMm: group.heightMm },
+          '记录上次打印尺寸',
+          false,
+        );
         setActivePrintGroup(group);
         setStatus(`正在打开 ${group.sizeLabel} 的打印设置；系统打印份数请保持 1`);
       }}

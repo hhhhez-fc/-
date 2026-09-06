@@ -104,6 +104,20 @@ describe('唛头打印工作台', () => {
     expect(html).toContain('>新增唛头</button>');
   });
 
+  it('undoes and redoes one manual-label addition from accessible header buttons', async () => {
+    const user = userEvent.setup();
+    render(<App initialState={createInitialDraft()} />);
+    const undo = screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' });
+    const redo = screen.getByRole('button', { name: '重做上一步，Ctrl+Y' });
+    expect((undo as HTMLButtonElement).disabled).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: '手动新增' }));
+    await user.click(undo);
+    expect(screen.getByText('已撤销：新增手动唛头')).toBeTruthy();
+    await user.click(redo);
+    expect(screen.getByText('已重做：新增手动唛头')).toBeTruthy();
+  });
+
   it('filters the record list, reports the count, and clears the query without changing draft state', async () => {
     const user = userEvent.setup();
     const first = createLabel({ content: 'AREEN-21', quantity: 1, source: 'manual', needsReview: false });
