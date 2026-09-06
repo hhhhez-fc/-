@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
-import { createInitialDraft } from '../src/domain/draft';
+import { createInitialDraft, type DraftState } from '../src/domain/draft';
 import { createLabel, defaultSizePresets } from '../src/domain/labels';
 import { recordRecentLabels, type RecentLabelInput } from '../src/domain/history';
 import { DRAFT_STORAGE_KEY } from '../src/domain/storage';
@@ -18,6 +18,24 @@ import LabelEditor from '../src/features/LabelEditor';
 import SourceHistory from '../src/features/SourceHistory';
 import { createPrintPlan } from '../src/domain/printing';
 import { buildFontSizePreviewLabel } from '../src/domain/fontSizePreview';
+
+beforeAll(() => {
+  Object.defineProperties(HTMLElement.prototype, {
+    hasPointerCapture: { configurable: true, value: () => false },
+    setPointerCapture: { configurable: true, value: () => undefined },
+    releasePointerCapture: { configurable: true, value: () => undefined },
+    scrollIntoView: { configurable: true, value: () => undefined },
+  });
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: class { observe() {} unobserve() {} disconnect() {} },
+  });
+});
+
+function storedDraft(): DraftState {
+  window.dispatchEvent(new Event('pagehide'));
+  return JSON.parse(window.localStorage.getItem(DRAFT_STORAGE_KEY)!);
+}
 
 afterEach(() => {
   cleanup();
@@ -46,6 +64,105 @@ const recentInput = (content: string, preset = defaultSizePresets[0]): RecentLab
 });
 
 describe('唛头打印工作台', () => {
+  it.each([
+    { name: '第 1 条唛头的打印数量', before: 1, after: 2, read: (draft: DraftState) => draft.labels[0].quantity },
+    { name: '全部字号', before: 26, after: 32, read: (draft: DraftState) => draft.labels[0].style.fontSizePt },
+  ])('ignores repeated Enter and blur submissions for $name and preserves redo', async ({ name, before, after, read }) => {
+    const user = userEvent.setup();
+    render(<App initialState={createInitialDraft()} />);
+    const input = screen.getByRole('spinbutton', { name });
+    await user.click(input);
+    fireEvent.change(input, { target: { value: String(after) } });
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }));
+    expect(read(storedDraft())).toBe(before);
+    await user.click(input);
+    await user.tab();
+    const redo = screen.getByRole('button', { name: '重做上一步，Ctrl+Y' }) as HTMLButtonElement;
+    expect(redo.disabled).toBe(false);
+    await user.click(redo);
+    expect(read(storedDraft())).toBe(after);
+  });
+
+  it('pastes a copied custom preset and record after clear as one undo and redo transition', async () => {
+    const user = userEvent.setup();
+    const initial = createInitialDraft();
+    const preset = { ...initial.sizePresets[0], id: 'custom', widthMm: 88, heightMm: 44 };
+    const label = createLabel({ content: 'BOX', quantity: 1, source: 'manual', needsReview: false, sizePresetId: preset.id });
+    render(<App initialState={{ ...initial, labels: [label], activeLabelId: label.id, sizePresets: [...initial.sizePresets, preset] }} />);
+    await user.click(screen.getByRole('button', { name: '复制所选' }));
+    await user.click(screen.getByRole('button', { name: '清空草稿' }));
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '清空草稿' }));
+    const cleared = storedDraft();
+    expect(cleared.sizePresets.some(({ id }) => id === 'custom')).toBe(false);
+    await user.click(screen.getByRole('button', { name: '粘贴' }));
+    const pasted = storedDraft();
+    const copy = pasted.labels.find(({ content }) => content === 'BOX')!;
+    expect(copy.id).not.toBe(label.id);
+    expect(pasted.sizePresets.find(({ id }) => id === copy.sizePresetId)).toMatchObject({ widthMm: 88, heightMm: 44 });
+    expect(createPrintPlan([copy], pasted.sizePresets)).toMatchObject({ blockers: [], groups: [{ widthMm: 88, heightMm: 44 }] });
+    await user.click(screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }));
+    expect(storedDraft().labels).toEqual(cleared.labels);
+    expect(storedDraft().sizePresets).toEqual(cleared.sizePresets);
+    await user.click(screen.getByRole('button', { name: '重做上一步，Ctrl+Y' }));
+    expect(storedDraft().labels).toEqual(pasted.labels);
+    expect(storedDraft().sizePresets).toEqual(pasted.sizePresets);
+  });
+
+  it.each(['{Control>}f{/Control}', '{Meta>}f{/Meta}'])('expands a collapsed records panel and focuses mounted search with %s', async (keys) => {
+    const user = userEvent.setup();
+    render(<App initialState={createInitialDraft()} />);
+    await user.click(screen.getByRole('button', { name: '收起唛头清单板块' }));
+    expect(screen.queryByRole('searchbox', { name: '搜索唛头' })).toBeNull();
+    await user.keyboard(keys);
+    const search = screen.getByRole('searchbox', { name: '搜索唛头' });
+    expect(storedDraft().workspaceLayout.sizes.records.collapsed).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(search));
+  });
+
+  it('keeps an enabled paste button after copying and deleting the last record', async () => {
+    const user = userEvent.setup();
+    const initial = createInitialDraft();
+    initial.labels[0].content = 'RESTORE';
+    render(<App initialState={initial} />);
+    await user.click(screen.getByRole('button', { name: '复制所选' }));
+    await user.click(within(screen.getByRole('list', { name: '唛头记录' })).getByRole('button', { name: '删除' }));
+    expect(storedDraft().labels).toEqual([]);
+    const paste = screen.getByRole('button', { name: '粘贴' }) as HTMLButtonElement;
+    expect(paste.disabled).toBe(false);
+    await user.click(paste);
+    expect(storedDraft().labels.map(({ content }) => content)).toEqual(['RESTORE']);
+    expect(storedDraft().labels[0].id).not.toBe(initial.labels[0].id);
+  });
+
+  it('keeps F1, Escape and focus owned by the open font-size popup', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<App initialState={createInitialDraft()} />);
+    await user.click(screen.getByRole('button', { name: '剪切所选' }));
+    const trigger = screen.getByRole('combobox', { name: '选择常用字号' });
+    await user.click(trigger);
+    const popup = screen.getByRole('listbox');
+    expect(popup.contains(document.activeElement)).toBe(true);
+    await user.keyboard('{F1}');
+    expect(screen.queryByRole('dialog', { name: '快捷键帮助' })).toBeNull();
+    expect(popup.contains(document.activeElement)).toBe(true);
+    expect(container.querySelector('[data-cut="true"]')).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(container.querySelector('[data-cut="true"]')).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(container.querySelector('[data-cut="true"]')).toBeNull();
+  });
+
+  it('ignores shortcut events already prevented by another control', () => {
+    render(<App initialState={createInitialDraft()} />);
+    const event = new KeyboardEvent('keydown', { key: 'F1', bubbles: true, cancelable: true });
+    event.preventDefault();
+    fireEvent(document, event);
+    expect(screen.queryByRole('dialog', { name: '快捷键帮助' })).toBeNull();
+  });
+
   it('首次打开自动创建空白唛头，并可在预览内直接输入', () => {
     const html = renderToStaticMarkup(<App initialState={createInitialDraft()} />);
 
@@ -112,9 +229,13 @@ describe('唛头打印工作台', () => {
     expect((undo as HTMLButtonElement).disabled).toBe(true);
 
     await user.click(screen.getByRole('button', { name: '手动新增' }));
+    const added = storedDraft().labels;
+    expect(added).toHaveLength(2);
     await user.click(undo);
+    expect(storedDraft().labels).toEqual([added[0]]);
     expect(screen.getByText('已撤销：新增手动唛头')).toBeTruthy();
     await user.click(redo);
+    expect(storedDraft().labels).toEqual(added);
     expect(screen.getByText('已重做：新增手动唛头')).toBeTruthy();
   });
 
@@ -155,9 +276,17 @@ describe('唛头打印工作台', () => {
     await user.click(screen.getByRole('button', { name: '复制所选' }));
     await user.click(screen.getByRole('button', { name: '清空搜索' }));
     await user.click(screen.getByRole('button', { name: '粘贴' }));
+    const pasted = storedDraft().labels;
+    expect(pasted).toHaveLength(4);
+    const copiedId = pasted.find(({ id }) => !labels.some((label) => label.id === id))!.id;
     expect(screen.getByText('已粘贴 1 条唛头')).toBeTruthy();
     await user.keyboard('{Control>}z{/Control}');
+    expect(storedDraft().labels.map(({ id }) => id)).toEqual(labels.map(({ id }) => id));
+    expect(storedDraft().labels.some(({ id }) => id === copiedId)).toBe(false);
     expect(screen.getByText('已撤销：粘贴 1 条唛头')).toBeTruthy();
+    await user.keyboard('{Control>}y{/Control}');
+    expect(storedDraft().labels).toEqual(pasted);
+    await user.keyboard('{Control>}z{/Control}');
 
     await user.click(screen.getByRole('button', { name: '检查并打印' }));
     const printDialog = screen.getByRole('dialog');
@@ -271,9 +400,13 @@ describe('唛头打印工作台', () => {
     render(<App initialState={createInitialDraft()} />);
 
     await user.click(screen.getByRole('button', { name: '手动新增' }));
+    const added = storedDraft().labels;
+    expect(added).toHaveLength(2);
     await user.keyboard('{Control>}z{/Control}');
+    expect(storedDraft().labels).toEqual([added[0]]);
     expect(screen.getByText('已撤销：新增手动唛头')).toBeTruthy();
     await user.keyboard('{Control>}y{/Control}');
+    expect(storedDraft().labels).toEqual(added);
     expect(screen.getByText('已重做：新增手动唛头')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: '剪切所选' }));

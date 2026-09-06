@@ -144,7 +144,7 @@ export type DraftAction =
   | { type: 'toggle-selected'; id: string }
   | { type: 'set-selected'; ids: string[] }
   | { type: 'apply-style-to-selected'; style: LabelStyle }
-  | { type: 'insert-labels'; labels: LabelRecord[]; afterId: string | null }
+  | { type: 'insert-labels'; labels: LabelRecord[]; afterId: string | null; sizePresets?: SizePreset[] }
   | { type: 'move-labels'; ids: string[]; afterId: string | null }
   | { type: 'delete-labels'; ids: string[] }
   | { type: 'delete-label'; id: string }
@@ -225,13 +225,17 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
     }
     case 'insert-labels': {
       if (action.labels.length === 0) return state;
+      const sizePresets = [...state.sizePresets];
+      for (const preset of action.sizePresets ?? []) {
+        if (!sizePresets.some(({ id }) => id === preset.id)) sizePresets.push({ ...preset });
+      }
       const labels = [...state.labels];
       const afterIndex = action.afterId === null
         ? labels.length - 1
         : labels.findIndex(({ id }) => id === action.afterId);
       labels.splice(afterIndex < 0 ? labels.length : afterIndex + 1, 0, ...action.labels);
       const insertedIds = action.labels.map(({ id }) => id);
-      return { ...state, labels, activeLabelId: insertedIds[0], selectedLabelIds: insertedIds };
+      return { ...state, labels, sizePresets, activeLabelId: insertedIds[0], selectedLabelIds: insertedIds };
     }
     case 'move-labels': {
       const movingIds = new Set(action.ids);

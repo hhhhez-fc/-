@@ -1,5 +1,6 @@
 import type { DraftAction, DraftState } from './draft';
-import type { LabelRecord } from './labels';
+import type { LabelRecord, SizePreset } from './labels';
+import { hasSameSizePresetSnapshot } from './history';
 
 export type ClipboardMode = 'copy' | 'cut';
 
@@ -7,6 +8,7 @@ export interface WorkspaceClipboard {
   mode: ClipboardMode;
   sourceIds: string[];
   labels: LabelRecord[];
+  sizePresets: SizePreset[];
 }
 
 export interface PasteActionResult {
@@ -38,7 +40,7 @@ function cloneLabelRecord(label: LabelRecord, id = label.id): LabelRecord {
 }
 
 export function createWorkspaceClipboard(
-  state: Pick<DraftState, 'labels'>,
+  state: Pick<DraftState, 'labels' | 'sizePresets'>,
   targetIds: string[],
   mode: ClipboardMode,
 ): WorkspaceClipboard | null {
@@ -52,20 +54,49 @@ export function createWorkspaceClipboard(
     mode,
     sourceIds: labels.map(({ id }) => id),
     labels,
+    sizePresets: mode === 'copy'
+      ? state.sizePresets.filter(({ id }) => labels.some((label) => label.sizePresetId === id))
+        .map((preset) => ({ ...preset }))
+      : [],
   };
 }
 
 export function buildPasteAction(
-  state: Pick<DraftState, 'labels' | 'activeLabelId'>,
+  state: Pick<DraftState, 'labels' | 'activeLabelId' | 'sizePresets'>,
   clipboard: WorkspaceClipboard | null,
   createId: () => string,
 ): PasteActionResult | null {
   if (!clipboard || clipboard.labels.length === 0) return null;
 
   if (clipboard.mode === 'copy') {
-    const labels = clipboard.labels.map((label) => cloneLabelRecord(label, createId()));
+    const availablePresets = [...state.sizePresets];
+    const sizePresets: SizePreset[] = [];
+    const presetIds = new Map<string, string>();
+    for (const snapshot of clipboard.sizePresets) {
+      const sameId = availablePresets.find(({ id }) => id === snapshot.id);
+      const equivalent = sameId && hasSameSizePresetSnapshot(sameId, snapshot)
+        ? sameId
+        : availablePresets.find((preset) => hasSameSizePresetSnapshot(preset, snapshot));
+      if (equivalent) {
+        presetIds.set(snapshot.id, equivalent.id);
+        continue;
+      }
+      let id = snapshot.id;
+      let suffix = 0;
+      while (availablePresets.some((preset) => preset.id === id)) {
+        id = `${snapshot.id}-copy-${suffix += 1}`;
+      }
+      const restored = { ...snapshot, id };
+      availablePresets.push(restored);
+      sizePresets.push(restored);
+      presetIds.set(snapshot.id, id);
+    }
+    const labels = clipboard.labels.map((label) => ({
+      ...cloneLabelRecord(label, createId()),
+      sizePresetId: presetIds.get(label.sizePresetId) ?? label.sizePresetId,
+    }));
     return {
-      action: { type: 'insert-labels', labels, afterId: state.activeLabelId },
+      action: { type: 'insert-labels', labels, sizePresets, afterId: state.activeLabelId },
       pastedIds: labels.map(({ id }) => id),
     };
   }

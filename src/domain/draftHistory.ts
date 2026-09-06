@@ -28,6 +28,20 @@ const applyActions = (state: DraftState, actions: DraftAction[]) => (
   actions.reduce(draftReducer, state)
 );
 
+// Drafts contain plain data. Skip shared branches, including large image strings,
+// while recognizing equivalent patches that allocate fresh objects or arrays.
+function sameDraftData(first: unknown, second: unknown): boolean {
+  if (Object.is(first, second)) return true;
+  if (!first || !second || typeof first !== 'object' || typeof second !== 'object') return false;
+  if (Array.isArray(first) !== Array.isArray(second)) return false;
+  const firstRecord = first as Record<string, unknown>;
+  const secondRecord = second as Record<string, unknown>;
+  const keys = Object.keys(firstRecord);
+  return keys.length === Object.keys(secondRecord).length
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(secondRecord, key)
+      && sameDraftData(firstRecord[key], secondRecord[key]));
+}
+
 export function draftHistoryReducer(
   history: DraftHistoryState,
   event: DraftHistoryEvent,
@@ -35,7 +49,7 @@ export function draftHistoryReducer(
   switch (event.type) {
     case 'apply': {
       const present = applyActions(history.present, event.actions);
-      if (present === history.present) return history;
+      if (sameDraftData(present, history.present)) return history;
       if (!event.record) {
         const snapshotActions: DraftAction[] = event.actions.some(({ type }) => (
           type === 'toggle-selected' || type === 'set-selected'

@@ -43,7 +43,9 @@ export default function FontSizePicker({ value, onCommit, onPreview }: FontSizeP
     }
     const fontSizePt = clampFontSizePt(Number(inputValue));
     setInputValue(String(fontSizePt));
-    onCommit({ fontMode: 'fixed', fontSizePt });
+    if (value.fontMode !== 'fixed' || value.fontSizePt !== fontSizePt) {
+      onCommit({ fontMode: 'fixed', fontSizePt });
+    }
     clearPreview();
   };
 

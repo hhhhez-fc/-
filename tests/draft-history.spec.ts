@@ -9,6 +9,39 @@ import {
 } from '../src/domain/draftHistory';
 
 describe('draft history', () => {
+  it('rejects same-value quantity and nested font submissions without losing redo', () => {
+    const initial = createInitialDraft();
+    const label = initial.labels[0];
+    for (const patch of [{ quantity: 2 }, { style: { ...label.style, fontSizePt: 32 } }]) {
+      const event = {
+        type: 'apply' as const,
+        actions: [{ type: 'update-label' as const, id: label.id, patch }],
+        description: '修改字段', record: true,
+      };
+      const changed = draftHistoryReducer(createDraftHistory(initial), event);
+      const repeated = draftHistoryReducer(changed, structuredClone(event));
+      expect(repeated).toBe(changed);
+      expect(repeated.past).toHaveLength(1);
+      const undone = draftHistoryReducer(repeated, { type: 'undo' });
+      expect(undone.present.labels[0]).toEqual(label);
+      const unchanged = draftHistoryReducer(undone, {
+        ...event,
+        actions: [{ type: 'update-label', id: label.id, patch: structuredClone(label) }],
+      });
+      expect(unchanged).toBe(undone);
+      expect(draftHistoryReducer(unchanged, { type: 'redo' }).present.labels[0]).toMatchObject(patch);
+    }
+  });
+
+  it('rejects a recorded action batch with no net data change', () => {
+    const initial = createDraftHistory(createInitialDraft());
+    expect(draftHistoryReducer(initial, {
+      type: 'apply', actions: [
+        { type: 'set-business', business: '临时' },
+        { type: 'set-business', business: '' },
+      ], description: '无变化', record: true,
+    })).toBe(initial);
+  });
   it('undoes and redoes one recorded edit', () => {
     const changed = draftHistoryReducer(createDraftHistory(createInitialDraft()), {
       type: 'apply',

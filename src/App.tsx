@@ -73,6 +73,7 @@ export default function App({ initialState }: AppProps) {
   const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
   const saveFailureRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingSearchFocusRef = useRef(false);
   const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
     event.preventDefault();
     event.returnValue = '';
@@ -317,14 +318,26 @@ export default function App({ initialState }: AppProps) {
   };
 
   useEffect(() => {
+    if (pendingSearchFocusRef.current && !state.workspaceLayout.sizes.records.collapsed) {
+      searchInputRef.current?.focus();
+      pendingSearchFocusRef.current = false;
+    }
+  }, [state.workspaceLayout.sizes.records.collapsed]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      // Radix owns keyboard semantics until its popup closes. The event target
+      // still identifies the popup if Escape unmounts it before this listener.
+      if (event.defaultPrevented || target?.closest('[role="listbox"]')
+        || document.querySelector('.font-size-content')) return;
       const shortcut = resolveWorkspaceShortcut({
         key: event.key,
         ctrlKey: event.ctrlKey,
         metaKey: event.metaKey,
         shiftKey: event.shiftKey,
         altKey: event.altKey,
-        textEditing: isTextEditingTarget(event.target instanceof Element ? event.target : null),
+        textEditing: isTextEditingTarget(target),
         isComposing: event.isComposing,
         modalOpen: confirmation !== null || printDialogOpen || shortcutHelpOpen,
       });
@@ -336,7 +349,12 @@ export default function App({ initialState }: AppProps) {
       else if (shortcut === 'paste') paste();
       else if (shortcut === 'undo') undoDraft();
       else if (shortcut === 'redo') redoDraft();
-      else if (shortcut === 'find') searchInputRef.current?.focus();
+      else if (shortcut === 'find') {
+        if (state.workspaceLayout.sizes.records.collapsed) {
+          pendingSearchFocusRef.current = true;
+          applyDraft({ type: 'toggle-panel-collapsed', id: 'records' }, '展开唛头清单');
+        } else searchInputRef.current?.focus();
+      }
       else if (shortcut === 'help') setShortcutHelpOpen(true);
       else if (clipboard?.mode === 'cut') {
         setClipboard(null);
@@ -465,7 +483,7 @@ export default function App({ initialState }: AppProps) {
           onDelete={deleteLabel}
         />
       ) : <div className="records-search-empty" role="status">没有匹配的唛头</div>}
-      {state.labels.length > 0 && (
+      {(state.labels.length > 0 || clipboard !== null) && (
         <div className="bulk-toolbar" aria-label="批量操作">
           <span>{selectedCount ? `已选 ${selectedCount} 条` : '勾选后可批量应用样式'}</span>
           <div>
@@ -484,7 +502,7 @@ export default function App({ initialState }: AppProps) {
               剪切所选
             </button>
             <button type="button" disabled={!clipboard} onClick={paste}>粘贴</button>
-            <button type="button" onClick={() => applyDraft(
+            <button type="button" disabled={state.labels.length === 0} onClick={() => applyDraft(
               { type: 'set-selected', ids: allSelected ? [] : state.labels.map((label) => label.id) },
               allSelected ? '取消全选唛头' : '全选唛头',
               false,
