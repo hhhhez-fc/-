@@ -61,6 +61,7 @@ export default function App({ initialState }: AppProps) {
     action: () => void;
   }>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printPreviewLabelId, setPrintPreviewLabelId] = useState<string | null>(null);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
   const [printRotations, setPrintRotations] = useState<Record<string, PrintRotation>>({});
@@ -98,6 +99,14 @@ export default function App({ initialState }: AppProps) {
     ? buildFontSizePreviewLabel(activeLabel, fontSizePreview.choice)
     : activeLabel;
   const printPlan = useMemo(() => createPrintPlan(state.labels, state.sizePresets), [state.labels, state.sizePresets]);
+  const printDialogPlan = useMemo(() => (
+    printPreviewLabelId === null
+      ? printPlan
+      : createPrintPlan(
+        state.labels.filter((label) => label.id === printPreviewLabelId),
+        state.sizePresets,
+      )
+  ), [printPlan, printPreviewLabelId, state.labels, state.sizePresets]);
   const visibleLabels = useMemo(
     () => filterLabelsByQuery(state.labels, searchQuery),
     [searchQuery, state.labels],
@@ -193,6 +202,7 @@ export default function App({ initialState }: AppProps) {
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
   const closePrintDialog = useCallback(() => {
     setPrintDialogOpen(false);
+    setPrintPreviewLabelId(null);
     setPrintRotations({});
   }, []);
   const closeShortcutHelp = useCallback(() => setShortcutHelpOpen(false), []);
@@ -266,6 +276,7 @@ export default function App({ initialState }: AppProps) {
   const openActivePrintPreview = () => {
     if (!activeLabel || activeReviewErrors.length > 0) return;
     recordPrintableLabels([activeLabel.id]);
+    setPrintPreviewLabelId(activeLabel.id);
     setPrintDialogOpen(true);
   };
   const undoDraft = () => {
@@ -649,6 +660,7 @@ export default function App({ initialState }: AppProps) {
           >恢复默认布局</button>
           <button className="button button-print" type="button" disabled={state.labels.length === 0} onClick={() => {
             recordPrintableLabels();
+            setPrintPreviewLabelId(null);
             setPrintDialogOpen(true);
           }}>
             检查并打印
@@ -707,7 +719,7 @@ export default function App({ initialState }: AppProps) {
     />
     <PrintReviewDialog
       open={printDialogOpen}
-      plan={printPlan}
+      plan={printDialogPlan}
       rotations={printRotations}
       onRotateLabel={rotatePrintedLabel}
       onClose={closePrintDialog}

@@ -392,7 +392,9 @@ describe('打印检查', () => {
 
     await user.click(screen.getByRole('button', { name: '打印预览' }));
 
-    expect(screen.getByRole('dialog')).toBeTruthy();
+    const dialog = screen.getByRole('dialog', { name: '共 1 张，可以打印' });
+    expect(dialog.textContent).toContain('ACTIVE');
+    expect(dialog.textContent).not.toContain('OTHER');
     await expectStoredHistory(['ACTIVE']);
   });
 
