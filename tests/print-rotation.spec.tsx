@@ -155,6 +155,8 @@ describe('打印文字旋转', () => {
     />);
 
     expect(html.match(/class="print-label-thumbnail-text"/g)).toHaveLength(2);
+    expect(html).toContain('class="print-label-thumbnail-content"');
+    expect(html).toContain('overflow:visible');
     expect(html).not.toContain('class="print-rotated-character"');
     expect(html.match(/class="print-text-layer"/g)).toHaveLength(1);
     expect(html.match(/rotate\(90deg\)/g)).toHaveLength(1);

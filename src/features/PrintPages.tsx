@@ -43,6 +43,7 @@ export default function PrintPages({ group, rotations = {} }: PrintPagesProps) {
               <div className="print-content-layer" style={{
                 left: `${printArea.leftMm}mm`, top: `${printArea.topMm}mm`,
                 width: `${printArea.widthMm}mm`, height: `${printArea.heightMm}mm`,
+                overflow: label.contentType === 'text' ? 'visible' : undefined,
               }}>
                 {label.contentType === 'image' && label.imageFallback
                   ? <img src={label.imageFallback} alt="" />

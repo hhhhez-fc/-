@@ -257,7 +257,10 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
         onPointerUp={finishPrintAreaDrag}
         onPointerCancel={() => { printAreaDragRef.current = null; setIsAreaDragging(false); }}
       >
-        <div className="label-content-layer" ref={contentLayerRef} style={{ inset: 0 }} onClick={(event) => {
+        <div className="label-content-layer" ref={contentLayerRef} style={{
+          inset: 0,
+          overflow: label.contentType === 'text' ? 'visible' : undefined,
+        }} onClick={(event) => {
           if (event.target === event.currentTarget && !printAreaHandleMovedRef.current) onClearLineSelection();
         }}>
         {draggingId && <><i className="snap-guide guide-x" /><i className="snap-guide guide-y" /></>}

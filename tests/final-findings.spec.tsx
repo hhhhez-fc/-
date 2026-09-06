@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
@@ -96,7 +97,7 @@ describe('最终审查回归', () => {
     }
   });
 
-  it('固定字号文字拖动到边缘后保持渲染字号并显示越界错误', () => {
+  it('固定字号文字拖动到边缘后保持渲染字号且不裁剪或显示越界错误', () => {
     render(<PreviewHarness fontSizePt={120} />);
     mockBounds(document.querySelector('.label-content-layer')!);
     const line = screen.getByRole('button', { name: /拖动第 1 行/ });
@@ -107,7 +108,35 @@ describe('最终审查回归', () => {
 
     expect(currentLabel().style).toMatchObject({ fontMode: 'fixed', fontSizePt: 120 });
     expect(screen.getByRole('button', { name: /拖动第 1 行/ }).style.fontSize).toBe(renderedFontSize);
-    expect(screen.getByText('固定字号下内容超出唛头范围')).toBeTruthy();
+    expect(screen.queryByText('固定字号下内容超出唛头范围')).toBeNull();
+    expect((document.querySelector('.label-content-layer') as HTMLElement).style.overflow).toBe('visible');
+  });
+
+  it('固定字号内容超出范围时仍可从编辑器进入打印检查', () => {
+    const label = labelFor('VERY-LONG-SHIPPING-MARK-THAT-OVERFLOWS');
+    label.style.fontSizePt = 300;
+    const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+
+    render(<App initialState={state} />);
+
+    expect(screen.queryByText(/打印前请处理：固定字号下内容超出唛头范围/)).toBeNull();
+    expect(screen.getByTestId('label-preview').classList.contains('has-overflow')).toBe(false);
+    const previewButton = screen.getByRole('button', { name: '打印预览' }) as HTMLButtonElement;
+    expect(previewButton.disabled).toBe(false);
+    fireEvent.click(previewButton);
+    expect(screen.getByRole('dialog', { name: /共 1 张，可以打印/ })).toBeTruthy();
+  });
+
+  it('实际打印允许文字超出内部打印区域且仍只生成一张纸', () => {
+    const label = labelFor('VERY-LONG-SHIPPING-MARK-THAT-OVERFLOWS');
+    label.style.fontSizePt = 300;
+    const group = createPrintPlan([label], defaultSizePresets).groups[0];
+
+    const html = renderToStaticMarkup(<PrintPages group={group} />);
+
+    expect(html).toContain('class="print-content-layer"');
+    expect(html).toContain('overflow:visible');
+    expect(html.match(/<section class="print-page"/g)).toHaveLength(1);
   });
 
   it('文字方向键只移动选中行，打印区域和未选行保持物理位置', () => {

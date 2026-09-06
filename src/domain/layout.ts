@@ -183,6 +183,7 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
         fontSizePt: fallbackFontSize,
         fontScale: fallbackFontSize / requested,
       };
+      rects.push(scaledLineRect(label, index, fallbackFontSize, fallbackFontSize / requested, width, height));
       firstOverflowFontSize ??= fallbackFontSize;
       continue;
     }
@@ -194,10 +195,10 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
   const fontSize = printableLineIndexes.length > 0
     ? lineLayouts[label.textLines[printableLineIndexes[0]].id].fontSizePt
     : label.style.fontSizePt;
-  if (firstOverflowFontSize !== undefined) {
+  if (firstOverflowFontSize !== undefined && !usesFixedFontSize) {
     return {
       ok: false,
-      error: usesFixedFontSize ? '固定字号下内容超出唛头范围' : '内容在最小字号下仍无法完整显示',
+      error: '内容在最小字号下仍无法完整显示',
       fontSize: firstOverflowFontSize,
       lineLayouts,
     };
@@ -247,7 +248,11 @@ export function solveTextLayout(input: LayoutInput): LayoutResult {
   }
   return input.fixedFontSize === undefined
     ? { ok: false, error: '内容在最小字号下仍无法完整显示' }
-    : { ok: false, error: '固定字号下内容超出唛头范围' };
+    : {
+      ok: true,
+      fontSize: clampFontSizePt(input.fixedFontSize),
+      lines: input.content.replace(/\r\n?/g, '\n').split('\n'),
+    };
 }
 
 export function validateLabelForPrint(label: LabelRecord, preset: SizePreset): string[] {

@@ -240,7 +240,7 @@ describe('唛头排版', () => {
     });
   });
 
-  it('固定字号文字移动到边缘后保持字号并报告越界', () => {
+  it('固定字号文字移动到边缘后保持字号并允许打印', () => {
     const label = createLabel({
       content: 'FYF-TTT0103',
       quantity: 1,
@@ -266,11 +266,12 @@ describe('唛头排版', () => {
       lines: ['FYF-TTT0103'],
     });
     expect(moved).toMatchObject({
-      ok: false,
-      error: '固定字号下内容超出唛头范围',
+      ok: true,
       fontSize: 32,
       lineLayouts: { [label.textLines[0].id]: { fontSizePt: 32, fontScale: 1 } },
+      lines: ['FYF-TTT0103'],
     });
+    expect(validateLabelForPrint(label, preset)).toEqual([]);
     expect(label.style.fontSizePt).toBe(32);
   });
 
@@ -313,7 +314,7 @@ describe('唛头排版', () => {
     });
   });
 
-  it('固定字号溢出时返回明确的打印阻断原因', () => {
+  it('固定字号溢出时保留原始文字并允许打印', () => {
     const result = solveTextLayout({
       content: 'VERY LONG SHIPPING MARK',
       widthMm: 20,
@@ -325,7 +326,11 @@ describe('唛头排版', () => {
       lineHeight: 1.2,
     });
 
-    expect(result).toEqual({ ok: false, error: '固定字号下内容超出唛头范围' });
+    expect(result).toEqual({
+      ok: true,
+      fontSize: 80,
+      lines: ['VERY LONG SHIPPING MARK'],
+    });
   });
 
   it('打印前报告数量和内容问题，但不报告人工校对状态', () => {

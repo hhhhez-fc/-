@@ -30,6 +30,23 @@ describe('print planning', () => {
     ]);
   });
 
+  it('keeps fixed-size overflow printable without adding a blocker', () => {
+    const label = createLabel({
+      content: 'VERY-LONG-SHIPPING-MARK-THAT-OVERFLOWS',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      sizePresetId: 'small',
+    });
+    label.style.fontSizePt = 300;
+
+    const plan = createPrintPlan([label], defaultSizePresets);
+
+    expect(plan.blockers).toEqual([]);
+    expect(plan.groups).toHaveLength(1);
+    expect(plan.totalCopies).toBe(1);
+  });
+
   it('blocks labels that reference a missing or invalid size preset', () => {
     const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false, sizePresetId: 'missing' });
     expect(createPrintPlan([label], defaultSizePresets).blockers[0].reasons).toEqual(['找不到对应的尺寸预设']);

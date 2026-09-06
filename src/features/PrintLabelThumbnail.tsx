@@ -35,6 +35,7 @@ export default function PrintLabelThumbnail({ label, preset, rotation }: PrintLa
         top: `${(printArea.topMm / preset.heightMm) * 100}%`,
         width: `${(printArea.widthMm / preset.widthMm) * 100}%`,
         height: `${(printArea.heightMm / preset.heightMm) * 100}%`,
+        overflow: label.contentType === 'text' ? 'visible' : undefined,
       }}>
         {label.contentType === 'image' && label.imageFallback
           ? <img src={label.imageFallback} alt="" />
