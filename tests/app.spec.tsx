@@ -64,6 +64,28 @@ const recentInput = (content: string, preset = defaultSizePresets[0]): RecentLab
 });
 
 describe('唛头打印工作台', () => {
+  it('keeps explicitly activated B active when undo restores deleted A without adding an empty history step', async () => {
+    const user = userEvent.setup();
+    const labels = ['A', 'B'].map((content) => createLabel({ content, quantity: 1, source: 'manual', needsReview: false }));
+    render(<App initialState={{ ...createInitialDraft(), labels, activeLabelId: labels[0].id }} />);
+    const records = screen.getByRole('list', { name: '唛头记录' });
+    await user.click(within(records).getAllByRole('button', { name: '删除' })[0]);
+    expect(storedDraft().labels.map(({ content }) => content)).toEqual(['B']);
+    expect(storedDraft().activeLabelId).toBe(labels[1].id);
+    await user.click(within(records).getByRole('button', { name: /^01\s+B\s/ }));
+    const undo = screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }) as HTMLButtonElement;
+    await user.click(undo);
+    expect(storedDraft().labels.map(({ content }) => content)).toEqual(['A', 'B']);
+    expect(storedDraft().activeLabelId).toBe(labels[1].id);
+    expect(within(records).getByRole('button', { name: /^02\s+B\s/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(undo.disabled).toBe(true);
+    const redo = screen.getByRole('button', { name: '重做上一步，Ctrl+Y' }) as HTMLButtonElement;
+    expect(redo.disabled).toBe(false);
+    await user.click(redo);
+    expect(storedDraft().labels.map(({ content }) => content)).toEqual(['B']);
+    expect(storedDraft().activeLabelId).toBe(labels[1].id);
+  });
+
   it.each([
     { name: '第 1 条唛头的打印数量', before: 1, after: 2, read: (draft: DraftState) => draft.labels[0].quantity },
     { name: '全部字号', before: 26, after: 32, read: (draft: DraftState) => draft.labels[0].style.fontSizePt },

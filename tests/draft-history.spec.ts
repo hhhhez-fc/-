@@ -9,6 +9,46 @@ import {
 } from '../src/domain/draftHistory';
 
 describe('draft history', () => {
+  it('synchronizes an unchanged explicit activation into past snapshots before undo', () => {
+    const labels = ['A', 'B'].map((content) => createLabel({ content, quantity: 1, source: 'manual', needsReview: false }));
+    const initial = { ...createInitialDraft(), labels, activeLabelId: labels[0].id };
+    const deleted = draftHistoryReducer(createDraftHistory(initial), {
+      type: 'apply', actions: [{ type: 'delete-label', id: labels[0].id }], description: '删除 A', record: true,
+    });
+    expect(deleted.present.activeLabelId).toBe(labels[1].id);
+    const activated = draftHistoryReducer(deleted, {
+      type: 'apply', actions: [{ type: 'set-active-label', id: labels[1].id }], description: '激活 B', record: false,
+    });
+    expect(activated.present).toEqual(deleted.present);
+    expect(activated.past).toHaveLength(1);
+    const undone = draftHistoryReducer(activated, { type: 'undo' });
+    expect(undone.present.labels).toEqual(labels);
+    expect(undone.present.activeLabelId).toBe(labels[1].id);
+    expect(canUndo(undone)).toBe(false);
+    expect(canRedo(undone)).toBe(true);
+    expect(draftHistoryReducer(undone, { type: 'redo' }).present).toEqual(deleted.present);
+  });
+
+  it('synchronizes an unchanged explicit activation into future snapshots without clearing redo', () => {
+    const initial = createInitialDraft();
+    const added = createLabel({ content: 'B', quantity: 1, source: 'manual', needsReview: false });
+    const changed = draftHistoryReducer(createDraftHistory(initial), {
+      type: 'apply', actions: [{ type: 'add-label', label: added }], description: '新增 B', record: true,
+    });
+    const undone = draftHistoryReducer(changed, { type: 'undo' });
+    const activated = draftHistoryReducer(undone, {
+      type: 'apply', actions: [{ type: 'set-active-label', id: initial.labels[0].id }], description: '激活 A', record: false,
+    });
+    expect(activated.present).toEqual(undone.present);
+    expect(activated.past).toHaveLength(0);
+    expect(activated.future).toHaveLength(1);
+    const redone = draftHistoryReducer(activated, { type: 'redo' });
+    expect(redone.present.labels).toEqual([...initial.labels, added]);
+    expect(redone.present.activeLabelId).toBe(initial.labels[0].id);
+    expect(canRedo(redone)).toBe(false);
+    expect(redone.past).toHaveLength(1);
+  });
+
   it('rejects same-value quantity and nested font submissions without losing redo', () => {
     const initial = createInitialDraft();
     const label = initial.labels[0];

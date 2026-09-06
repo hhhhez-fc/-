@@ -49,7 +49,7 @@ export function draftHistoryReducer(
   switch (event.type) {
     case 'apply': {
       const present = applyActions(history.present, event.actions);
-      if (sameDraftData(present, history.present)) return history;
+      if (event.record && sameDraftData(present, history.present)) return history;
       if (!event.record) {
         const snapshotActions: DraftAction[] = event.actions.some(({ type }) => (
           type === 'toggle-selected' || type === 'set-selected'
