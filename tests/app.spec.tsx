@@ -134,6 +134,53 @@ describe('唛头打印工作台', () => {
     expect(container.querySelector('.label-list')?.textContent).toContain('BOX-9');
     expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: '搜索唛头' }));
   });
+
+  it('copies and repeatedly pastes an independent selected record', async () => {
+    const user = userEvent.setup();
+    const label = createLabel({ content: 'COPY-ME', quantity: 1, source: 'manual', needsReview: false });
+    const { container } = render(<App initialState={{
+      ...createInitialDraft(),
+      labels: [label],
+      activeLabelId: label.id,
+      selectedLabelIds: [label.id],
+    }} />);
+
+    await user.click(screen.getByRole('button', { name: '复制所选' }));
+    expect((screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }) as HTMLButtonElement).disabled).toBe(true);
+    await user.click(screen.getByRole('button', { name: '粘贴' }));
+    await user.click(screen.getByRole('button', { name: '粘贴' }));
+
+    expect(screen.getByText('已粘贴 1 条唛头')).toBeTruthy();
+    expect(Array.from(container.querySelectorAll('.label-row-copy strong'), (node) => node.textContent)).toEqual([
+      'COPY-ME', 'COPY-ME', 'COPY-ME',
+    ]);
+  });
+
+  it('marks a pending cut, moves it after the active destination, and undoes the move', async () => {
+    const user = userEvent.setup();
+    const labels = ['A', 'B', 'C'].map((content) => createLabel({
+      content,
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    }));
+    const { container } = render(<App initialState={{
+      ...createInitialDraft(),
+      labels,
+      activeLabelId: labels[2].id,
+      selectedLabelIds: [labels[0].id],
+    }} />);
+
+    await user.click(screen.getByRole('button', { name: '剪切所选' }));
+    expect(screen.getByText('待剪切')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /^03\s+C\s/ }));
+    await user.click(screen.getByRole('button', { name: '粘贴' }));
+    expect(screen.getByText('已移动 1 条唛头')).toBeTruthy();
+    expect(Array.from(container.querySelectorAll('.label-row-copy strong'), (node) => node.textContent)).toEqual(['B', 'C', 'A']);
+
+    await user.click(screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }));
+    expect(Array.from(container.querySelectorAll('.label-row-copy strong'), (node) => node.textContent)).toEqual(['A', 'B', 'C']);
+  });
 });
 
 describe('使用过的唛头', () => {

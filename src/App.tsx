@@ -33,6 +33,12 @@ import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSiz
 import { hasSameSizePresetSnapshot, restoreRecentLabel, type RecentLabelEntry } from './domain/history';
 import { nextPrintRotation, type PrintRotation } from './domain/printRotation';
 import { filterLabelsByQuery } from './domain/labelSearch';
+import {
+  buildPasteAction,
+  createWorkspaceClipboard,
+  type ClipboardMode,
+  type WorkspaceClipboard,
+} from './domain/workspaceClipboard';
 
 interface AppProps {
   initialState?: DraftState;
@@ -60,6 +66,7 @@ export default function App({ initialState }: AppProps) {
   const [fontSizePreview, setFontSizePreview] = useState<null | { labelId: string; choice: FontSizeChoice }>(null);
   const [panelDropTarget, setPanelDropTarget] = useState<WorkspacePanelDropTarget | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
   const saveFailureRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
@@ -116,7 +123,16 @@ export default function App({ initialState }: AppProps) {
     if (typeof window === 'undefined') return;
     const persistDraft = (updateStatus: boolean) => {
       const saved = saveDraftSafely(() => window.localStorage, state);
-      if (updateStatus) setStatus(saved ? '已保存在本机' : '无法保存草稿，请勿关闭页面');
+      if (updateStatus) {
+        setStatus((current) => {
+          if (!saved) return '无法保存草稿，请勿关闭页面';
+          return current === '草稿仅保存在这台电脑'
+            || current === '已保存在本机'
+            || current === '无法保存草稿，请勿关闭页面'
+            ? '已保存在本机'
+            : current;
+        });
+      }
       if (!saved && !saveFailureRef.current) window.addEventListener('beforeunload', warnBeforeUnload);
       if (saved && saveFailureRef.current) window.removeEventListener('beforeunload', warnBeforeUnload);
       saveFailureRef.current = !saved;
@@ -260,6 +276,27 @@ export default function App({ initialState }: AppProps) {
     historyDispatch({ type: 'redo' });
     setStatus(`已重做：${description}`);
   };
+  const clipboardTargetIds = () => state.selectedLabelIds.length > 0
+    ? state.selectedLabelIds
+    : state.activeLabelId ? [state.activeLabelId] : [];
+  const copyOrCut = (mode: ClipboardMode) => {
+    const nextClipboard = createWorkspaceClipboard(state, clipboardTargetIds(), mode);
+    if (!nextClipboard) return;
+    setClipboard(nextClipboard);
+    setStatus(mode === 'copy'
+      ? `已复制 ${nextClipboard.sourceIds.length} 条唛头`
+      : `已剪切 ${nextClipboard.sourceIds.length} 条唛头，选择目标后粘贴`);
+  };
+  const paste = () => {
+    const result = buildPasteAction(state, clipboard, () => crypto.randomUUID());
+    if (!result || !clipboard) return;
+    const isCut = clipboard.mode === 'cut';
+    applyDraft(result.action, isCut ? '移动剪切的唛头' : '粘贴复制的唛头');
+    if (isCut) setClipboard(null);
+    setStatus(isCut
+      ? `已移动 ${result.pastedIds.length} 条唛头`
+      : `已粘贴 ${result.pastedIds.length} 条唛头`);
+  };
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
     intake: <>
       <div className="panel-heading panel-drag-handle" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动录入来源板块；左右方向键换位">
@@ -366,6 +403,7 @@ export default function App({ initialState }: AppProps) {
           labels={visibleLabels}
           activeLabelId={state.activeLabelId}
           selectedLabelIds={state.selectedLabelIds}
+          cutLabelIds={clipboard?.mode === 'cut' ? clipboard.sourceIds : []}
           onActivate={activateLabel}
           onToggleSelect={(id) => applyDraft({ type: 'toggle-selected', id }, '选择唛头', false)}
           onQuantityChange={(id, quantity) => applyDraft(
@@ -380,6 +418,21 @@ export default function App({ initialState }: AppProps) {
         <div className="bulk-toolbar" aria-label="批量操作">
           <span>{selectedCount ? `已选 ${selectedCount} 条` : '勾选后可批量应用样式'}</span>
           <div>
+            <button
+              type="button"
+              disabled={clipboardTargetIds().length === 0}
+              onClick={() => copyOrCut('copy')}
+            >
+              复制所选
+            </button>
+            <button
+              type="button"
+              disabled={clipboardTargetIds().length === 0}
+              onClick={() => copyOrCut('cut')}
+            >
+              剪切所选
+            </button>
+            <button type="button" disabled={!clipboard} onClick={paste}>粘贴</button>
             <button type="button" onClick={() => applyDraft(
               { type: 'set-selected', ids: allSelected ? [] : state.labels.map((label) => label.id) },
               allSelected ? '取消全选唛头' : '全选唛头',

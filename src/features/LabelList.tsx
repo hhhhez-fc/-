@@ -6,6 +6,7 @@ export interface LabelListProps {
   labels: LabelRecord[];
   activeLabelId: string | null;
   selectedLabelIds: string[];
+  cutLabelIds?: string[];
   onActivate: (id: string) => void;
   onToggleSelect: (id: string) => void;
   onQuantityChange: (id: string, quantity: number) => void;
@@ -13,7 +14,7 @@ export interface LabelListProps {
   onDelete: (id: string) => void;
 }
 
-export default function LabelList({ labels, activeLabelId, selectedLabelIds, onActivate, onToggleSelect, onQuantityChange, onDuplicate, onDelete }: LabelListProps) {
+export default function LabelList({ labels, activeLabelId, selectedLabelIds, cutLabelIds = [], onActivate, onToggleSelect, onQuantityChange, onDuplicate, onDelete }: LabelListProps) {
   if (labels.length === 0) {
     return (
       <div className="records-empty">
@@ -26,7 +27,7 @@ export default function LabelList({ labels, activeLabelId, selectedLabelIds, onA
   return (
     <ol className="label-list" aria-label="唛头记录">
       {labels.map((label, index) => (
-        <li className="label-list-item" key={label.id}>
+        <li className="label-list-item" key={label.id} data-cut={cutLabelIds.includes(label.id) ? 'true' : undefined}>
           <label className="row-check" title="加入批量操作">
             <input
               type="checkbox"
@@ -38,6 +39,7 @@ export default function LabelList({ labels, activeLabelId, selectedLabelIds, onA
           <button
             className="label-row"
             type="button"
+            aria-label={`${String(index + 1).padStart(2, '0')} ${label.content.trim() || '未填写内容'} ${label.quantity} 件 × ${label.sides} 面`}
             aria-pressed={label.id === activeLabelId}
             onClick={() => onActivate(label.id)}
           >
@@ -45,6 +47,7 @@ export default function LabelList({ labels, activeLabelId, selectedLabelIds, onA
             <span className="label-row-copy">
               <strong>{label.content.trim() || '未填写内容'}</strong>
               <small>{label.quantity} 件 × {label.sides} 面 · {label.source === 'manual' ? '手动' : label.source}</small>
+              {cutLabelIds.includes(label.id) && <span className="cut-status">待剪切</span>}
             </span>
           </button>
           <QuantityStepper
