@@ -4,6 +4,7 @@ import { createLabel, defaultSizeTypeForBusiness, type LabelPurpose } from './do
 import { recoverDraft, saveDraftSafely } from './domain/storage';
 import LabelEditor from './features/LabelEditor';
 import LabelList from './features/LabelList';
+import RecordSearch from './features/RecordSearch';
 import SourceHistory from './features/SourceHistory';
 import LabelPreview from './features/LabelPreview';
 import SizeStylePanel from './features/SizeStylePanel';
@@ -25,6 +26,7 @@ import WorkspacePanel from './features/WorkspacePanel';
 import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSizePreview';
 import { hasSameSizePresetSnapshot, restoreRecentLabel, type RecentLabelEntry } from './domain/history';
 import { nextPrintRotation, type PrintRotation } from './domain/printRotation';
+import { filterLabelsByQuery } from './domain/labelSearch';
 
 interface AppProps {
   initialState?: DraftState;
@@ -48,7 +50,9 @@ export default function App({ initialState }: AppProps) {
   const [selectedLineIds, setSelectedLineIds] = useState<string[]>([]);
   const [fontSizePreview, setFontSizePreview] = useState<null | { labelId: string; choice: FontSizeChoice }>(null);
   const [panelDropTarget, setPanelDropTarget] = useState<WorkspacePanelDropTarget | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const saveFailureRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
     event.preventDefault();
     event.returnValue = '';
@@ -63,6 +67,10 @@ export default function App({ initialState }: AppProps) {
     ? buildFontSizePreviewLabel(activeLabel, fontSizePreview.choice)
     : activeLabel;
   const printPlan = useMemo(() => createPrintPlan(state.labels, state.sizePresets), [state.labels, state.sizePresets]);
+  const visibleLabels = useMemo(
+    () => filterLabelsByQuery(state.labels, searchQuery),
+    [searchQuery, state.labels],
+  );
   const activeReviewErrors = activeLabel && activePreset
     ? [...validateSizePreset(activePreset), ...validateLabelForPrint(activeLabel, activePreset)]
     : [];
@@ -291,16 +299,29 @@ export default function App({ initialState }: AppProps) {
           <p>{state.labels.length} 条记录</p>
         </div>
       </div>
-      <LabelList
-        labels={state.labels}
-        activeLabelId={state.activeLabelId}
-        selectedLabelIds={state.selectedLabelIds}
-        onActivate={activateLabel}
-        onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
-        onQuantityChange={(id, quantity) => dispatch({ type: 'update-label', id, patch: { quantity } })}
-        onDuplicate={duplicateLabel}
-        onDelete={deleteLabel}
+      <RecordSearch
+        query={searchQuery}
+        resultCount={visibleLabels.length}
+        totalCount={state.labels.length}
+        inputRef={searchInputRef}
+        onChange={setSearchQuery}
+        onClear={() => {
+          setSearchQuery('');
+          searchInputRef.current?.focus();
+        }}
       />
+      {visibleLabels.length > 0 || state.labels.length === 0 ? (
+        <LabelList
+          labels={visibleLabels}
+          activeLabelId={state.activeLabelId}
+          selectedLabelIds={state.selectedLabelIds}
+          onActivate={activateLabel}
+          onToggleSelect={(id) => dispatch({ type: 'toggle-selected', id })}
+          onQuantityChange={(id, quantity) => dispatch({ type: 'update-label', id, patch: { quantity } })}
+          onDuplicate={duplicateLabel}
+          onDelete={deleteLabel}
+        />
+      ) : <div className="records-search-empty" role="status">没有匹配的唛头</div>}
       {state.labels.length > 0 && (
         <div className="bulk-toolbar" aria-label="批量操作">
           <span>{selectedCount ? `已选 ${selectedCount} 条` : '勾选后可批量应用样式'}</span>

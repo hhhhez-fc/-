@@ -103,6 +103,23 @@ describe('唛头打印工作台', () => {
     expect(html).toContain('aria-label="在尺寸与预览中新增唛头"');
     expect(html).toContain('>新增唛头</button>');
   });
+
+  it('filters the record list, reports the count, and clears the query without changing draft state', async () => {
+    const user = userEvent.setup();
+    const first = createLabel({ content: 'AREEN-21', quantity: 1, source: 'manual', needsReview: false });
+    const second = createLabel({ content: 'BOX-9', quantity: 1, source: 'manual', needsReview: false });
+    const { container } = render(<App initialState={{ ...createInitialDraft(), labels: [first, second], activeLabelId: first.id }} />);
+
+    await user.type(screen.getByRole('searchbox', { name: '搜索唛头' }), 'box');
+    expect(container.querySelector('.label-list')?.textContent).not.toContain('AREEN-21');
+    expect(container.querySelector('.label-list')?.textContent).toContain('BOX-9');
+    expect(screen.getByText('1 / 2 条')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: '清空搜索' }));
+    expect(container.querySelector('.label-list')?.textContent).toContain('AREEN-21');
+    expect(container.querySelector('.label-list')?.textContent).toContain('BOX-9');
+    expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: '搜索唛头' }));
+  });
 });
 
 describe('使用过的唛头', () => {
