@@ -18,6 +18,7 @@ import ExcelImporter from './features/ExcelImporter';
 import ImageImporter from './features/ImageImporter';
 import ConfirmDialog from './features/ConfirmDialog';
 import PrintReviewDialog from './features/PrintReviewDialog';
+import ShortcutHelpDialog from './features/ShortcutHelpDialog';
 import PrintPages from './features/PrintPages';
 import { createPrintPlan, type PrintGroup } from './domain/printing';
 import { validateLabelForPrint } from './domain/layout';
@@ -39,6 +40,7 @@ import {
   type ClipboardMode,
   type WorkspaceClipboard,
 } from './domain/workspaceClipboard';
+import { isTextEditingTarget, resolveWorkspaceShortcut } from './domain/shortcutKeys';
 
 interface AppProps {
   initialState?: DraftState;
@@ -59,6 +61,7 @@ export default function App({ initialState }: AppProps) {
     action: () => void;
   }>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
   const [printRotations, setPrintRotations] = useState<Record<string, PrintRotation>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
@@ -192,6 +195,7 @@ export default function App({ initialState }: AppProps) {
     setPrintDialogOpen(false);
     setPrintRotations({});
   }, []);
+  const closeShortcutHelp = useCallback(() => setShortcutHelpOpen(false), []);
   const rotatePrintedLabel = useCallback((id: string) => {
     setPrintRotations((current) => ({
       ...current,
@@ -297,6 +301,39 @@ export default function App({ initialState }: AppProps) {
       ? `已移动 ${result.pastedIds.length} 条唛头`
       : `已粘贴 ${result.pastedIds.length} 条唛头`);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const shortcut = resolveWorkspaceShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        textEditing: isTextEditingTarget(event.target instanceof Element ? event.target : null),
+        isComposing: event.isComposing,
+        modalOpen: confirmation !== null || printDialogOpen || shortcutHelpOpen,
+      });
+      if (!shortcut) return;
+
+      event.preventDefault();
+      if (shortcut === 'copy') copyOrCut('copy');
+      else if (shortcut === 'cut') copyOrCut('cut');
+      else if (shortcut === 'paste') paste();
+      else if (shortcut === 'undo') undoDraft();
+      else if (shortcut === 'redo') redoDraft();
+      else if (shortcut === 'find') searchInputRef.current?.focus();
+      else if (shortcut === 'help') setShortcutHelpOpen(true);
+      else if (clipboard?.mode === 'cut') {
+        setClipboard(null);
+        setStatus('已取消剪切');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [clipboard, confirmation, history, printDialogOpen, shortcutHelpOpen, state]);
+
   const panelContents: Record<WorkspacePanelId, ReactNode> = {
     intake: <>
       <div className="panel-heading panel-drag-handle" role="group" aria-roledescription="可拖动板块" tabIndex={0} data-panel-drag-handle data-testid="panel-drag-handle" aria-label="拖动录入来源板块；左右方向键换位">
@@ -552,7 +589,7 @@ export default function App({ initialState }: AppProps) {
 
   return (
     <>
-    <div className="app-shell" inert={confirmation !== null || printDialogOpen}>
+    <div className="app-shell" inert={confirmation !== null || printDialogOpen || shortcutHelpOpen}>
       <header className="app-header">
         <div>
           <p className="eyebrow">LOCAL PRINT DESK · 本地处理</p>
@@ -560,6 +597,12 @@ export default function App({ initialState }: AppProps) {
         </div>
         <div className="header-actions">
           <span className="app-status" role="status" aria-live="polite">{status}</span>
+          <button
+            className="button button-quiet"
+            type="button"
+            aria-label="快捷键帮助，F1"
+            onClick={() => setShortcutHelpOpen(true)}
+          >快捷键</button>
           <button
             className="button button-quiet"
             type="button"
@@ -679,6 +722,7 @@ export default function App({ initialState }: AppProps) {
         setStatus(`正在打开 ${group.sizeLabel} 的打印设置；系统打印份数请保持 1`);
       }}
     />
+    <ShortcutHelpDialog open={shortcutHelpOpen} onClose={closeShortcutHelp} />
     <PrintPages group={activePrintGroup} rotations={printRotations} />
     </>
   );

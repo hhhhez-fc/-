@@ -506,6 +506,18 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .button-danger { color: #fff; background: var(--color-danger); border-color: var(--color-danger); }
 .button-danger:hover { background: #84201b; }
 .print-dialog { z-index: var(--z-dialog); width: min(100%,42rem); max-height: min(85vh,46rem); overflow: auto; background: var(--color-paper); border: 2px solid var(--color-ink); box-shadow: 0 18px 48px rgba(0,0,0,.32); }
+.shortcut-dialog { z-index: var(--z-dialog); display: grid; grid-template-rows: auto minmax(0,1fr) auto; width: min(100%,34rem); max-height: min(85vh,42rem); overflow: hidden; background: var(--color-paper); border: 2px solid var(--color-ink); box-shadow: 0 18px 48px rgba(0,0,0,.32); }
+.shortcut-dialog-header, .shortcut-dialog-footer { position: sticky; z-index: 1; padding: 1rem 1.15rem; background: #f5f5ef; }
+.shortcut-dialog-header { top: 0; border-bottom: 1px solid var(--color-line); }
+.shortcut-dialog-header h2 { margin: .35rem 0 0; font-size: 1.15rem; }
+.shortcut-dialog-content { overflow: auto; padding: .45rem 1.15rem; }
+.shortcut-list { display: grid; margin: 0; }
+.shortcut-list > div { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid var(--color-line); }
+.shortcut-list > div:last-child { border-bottom: 0; }
+.shortcut-list dt { font-size: .75rem; font-weight: 700; line-height: 1.45; }
+.shortcut-list dd { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .35rem; margin: 0; color: var(--color-muted); font-size: .65rem; }
+.shortcut-list kbd { padding: .28rem .42rem; color: var(--color-ink); background: #fff; border: 1px solid #858c86; border-bottom-width: 2px; border-radius: var(--radius-sm); font: 700 .66rem Bahnschrift,Consolas,monospace; white-space: nowrap; }
+.shortcut-dialog-footer { bottom: 0; display: flex; justify-content: flex-end; border-top: 1px solid var(--color-line); }
 .print-dialog-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.15rem; background: #f5f5ef; border-bottom: 1px solid var(--color-line); }
 .print-dialog-header h2 { margin: .35rem 0 0; font-size: 1.15rem; }
 .print-blockers, .print-groups { padding: 1rem 1.15rem 1.2rem; }
@@ -572,6 +584,8 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
   .print-groups article { grid-template-columns: 2rem minmax(0,1fr); }
   .print-group-actions { grid-column: 1/-1; align-items: stretch; flex-direction: column; }
   .print-label-preview-row { grid-template-columns: minmax(0,1fr); }
+  .shortcut-list > div { grid-template-columns: minmax(0,1fr); gap: .45rem; }
+  .shortcut-list dd { justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) {
   /* Accessibility override must win over every component transition. */

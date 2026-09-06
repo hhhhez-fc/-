@@ -181,6 +181,67 @@ describe('唛头打印工作台', () => {
     await user.click(screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }));
     expect(Array.from(container.querySelectorAll('.label-row-copy strong'), (node) => node.textContent)).toEqual(['A', 'B', 'C']);
   });
+
+  it('opens keyboard help with F1 and preserves native shortcuts in search input', async () => {
+    const user = userEvent.setup();
+    render(<App initialState={createInitialDraft()} />);
+
+    await user.keyboard('{F1}');
+    expect(screen.getByRole('dialog', { name: '快捷键帮助' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: '快捷键帮助' })).toBeNull();
+
+    const search = screen.getByRole('searchbox', { name: '搜索唛头' });
+    await user.click(search);
+    await user.keyboard('{Control>}z{/Control}');
+    expect((screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('traps shortcut-help focus, makes the workspace inert, and restores the trigger', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<App initialState={createInitialDraft()} />);
+    const trigger = screen.getByRole('button', { name: '快捷键帮助，F1' });
+
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: '快捷键帮助' });
+    const close = screen.getByRole('button', { name: '关闭快捷键帮助' });
+    expect(document.activeElement).toBe(close);
+    expect(container.querySelector('.app-shell')?.hasAttribute('inert')).toBe(true);
+    expect(dialog.textContent).toContain('Ctrl / ⌘ + C');
+    expect(dialog.textContent).not.toContain('删除');
+
+    await user.tab();
+    expect(document.activeElement).toBe(close);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(close);
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('runs undo and redo shortcuts and Escape cancels pending cut', async () => {
+    const user = userEvent.setup();
+    render(<App initialState={createInitialDraft()} />);
+
+    await user.click(screen.getByRole('button', { name: '手动新增' }));
+    await user.keyboard('{Control>}z{/Control}');
+    expect(screen.getByText('已撤销：新增手动唛头')).toBeTruthy();
+    await user.keyboard('{Control>}y{/Control}');
+    expect(screen.getByText('已重做：新增手动唛头')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: '剪切所选' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByText('待剪切')).toBeNull();
+    expect(screen.getByText('已取消剪切')).toBeTruthy();
+  });
+
+  it('focuses record search with the find shortcut', async () => {
+    const user = userEvent.setup();
+    render(<App initialState={createInitialDraft()} />);
+
+    await user.keyboard('{Control>}f{/Control}');
+
+    expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: '搜索唛头' }));
+  });
 });
 
 describe('使用过的唛头', () => {
