@@ -7,7 +7,6 @@ import {
   hydrateWorkspaceLayout,
   moveWorkspacePanel,
   placeWorkspacePanel,
-  reorderWorkspacePanels,
   resizeWorkspacePanel,
   toggleWorkspacePanel,
   workspacePanelAutoScrollDirection,
@@ -91,7 +90,7 @@ it('migrates untouched legacy default widths so existing users receive the singl
 });
 
 it('reorders by the target position and clamps saved sizes', () => {
-  const reordered = reorderWorkspacePanels(DEFAULT_WORKSPACE_LAYOUT, 'records', 'preview');
+  const reordered = placeWorkspacePanel(DEFAULT_WORKSPACE_LAYOUT, 'records', 'preview', 'before');
   expect(reordered.order).toEqual(['intake', 'records', 'preview']);
   expect(resizeWorkspacePanel(reordered, 'records', { widthPx: 2000, heightPx: 100 }))
     .toMatchObject({ sizes: { records: { widthPx: 900, heightPx: 320 } } });
@@ -105,7 +104,7 @@ it('allows a panel to shrink to 180px without collapsing below the usable minimu
 });
 
 it('places a preceding panel at its target position', () => {
-  expect(reorderWorkspacePanels(DEFAULT_WORKSPACE_LAYOUT, 'intake', 'records').order)
+  expect(placeWorkspacePanel(DEFAULT_WORKSPACE_LAYOUT, 'intake', 'records', 'before').order)
     .toEqual(['preview', 'intake', 'records']);
 });
 

@@ -7,7 +7,6 @@ import {
   type LabelRecord,
   type LabelStyle,
   type SizePreset,
-  validateSizePreset,
 } from './labels';
 import { syncTextLines } from './textLines';
 import {

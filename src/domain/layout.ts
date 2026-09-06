@@ -3,19 +3,6 @@ import { buildStyledSegments } from './richText';
 import { resolvePrintArea } from './placement';
 import { MAX_LABEL_QUANTITY } from './quantity';
 
-export interface LayoutInput {
-  content: string;
-  widthMm: number;
-  heightMm: number;
-  paddingMm: number;
-  maxFontSize: number;
-  minFontSize: number;
-  fixedFontSize?: number;
-  lineHeight?: number;
-}
-
-export type LayoutResult = { ok: true; fontSize: number; lines: string[] } | { ok: false; error: string; fontSize?: number };
-
 export interface ResolvedLineLayout {
   fontSizePt: number;
   fontScale: number;
@@ -209,50 +196,6 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
     return { ok: false, error: '文字行发生重叠', fontSize, lineLayouts };
   }
   return { ok: true, fontSize, lineLayouts, lines: label.textLines.map((line) => line.text) };
-}
-
-function wrapText(content: string, maxChars: number) {
-  const lines: string[] = [];
-  for (const paragraph of content.split(/\r?\n/)) {
-    let remaining = paragraph.trim();
-    if (!remaining) { lines.push(''); continue; }
-    while (remaining.length > maxChars) {
-      let breakAt = remaining.lastIndexOf(' ', maxChars);
-      if (breakAt < Math.floor(maxChars * 0.55)) breakAt = maxChars;
-      lines.push(remaining.slice(0, breakAt).trim());
-      remaining = remaining.slice(breakAt).trim();
-    }
-    lines.push(remaining);
-  }
-  return lines;
-}
-
-export function solveTextLayout(input: LayoutInput): LayoutResult {
-  const width = Math.max(1, (input.widthMm - input.paddingMm * 2) * MM_TO_PX);
-  const height = Math.max(1, (input.heightMm - input.paddingMm * 2) * MM_TO_PX);
-  const lineHeight = input.lineHeight ?? 1.28;
-  const candidates = input.fixedFontSize === undefined
-    ? fontSizeCandidates(input.maxFontSize, input.minFontSize)
-    : [clampFontSizePt(input.fixedFontSize)];
-
-  for (const fontSize of candidates) {
-    const fontSizePx = fontSize * (96 / 72);
-    const maxChars = Math.floor(width / (fontSizePx * 0.62));
-    if (maxChars < 1) continue;
-    const lines = wrapText(input.content, maxChars);
-    const longest = Math.max(...lines.map((line) => line.length), 0);
-    const totalHeight = lines.length * fontSizePx * lineHeight;
-    if (longest * fontSizePx * 0.62 <= width && totalHeight <= height) {
-      return { ok: true, fontSize, lines };
-    }
-  }
-  return input.fixedFontSize === undefined
-    ? { ok: false, error: '内容在最小字号下仍无法完整显示' }
-    : {
-      ok: true,
-      fontSize: clampFontSizePt(input.fixedFontSize),
-      lines: input.content.replace(/\r\n?/g, '\n').split('\n'),
-    };
 }
 
 export function validateLabelForPrint(label: LabelRecord, preset: SizePreset): string[] {

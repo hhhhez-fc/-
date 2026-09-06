@@ -245,37 +245,6 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-export async function recognizeImage(
-  image: File,
-  onProgress?: (progress: OcrProgress) => void,
-  signal?: AbortSignal,
-): Promise<string> {
-  if (signal?.aborted) throw new DOMException('图片识别已取消', 'AbortError');
-  const { createWorker, OEM } = await import('tesseract.js');
-  if (signal?.aborted) throw new DOMException('图片识别已取消', 'AbortError');
-  const worker = await createWorker(['eng', 'chi_sim'], OEM.LSTM_ONLY, {
-    logger: ({ status, progress }) => onProgress?.({ status, progress }),
-  });
-
-  if (signal?.aborted) {
-    await worker.terminate();
-    throw new DOMException('图片识别已取消', 'AbortError');
-  }
-
-  let rejectAbort: ((reason: DOMException) => void) | undefined;
-  const abortPromise = new Promise<never>((_, reject) => { rejectAbort = reject; });
-  const handleAbort = () => rejectAbort?.(new DOMException('图片识别已取消', 'AbortError'));
-  signal?.addEventListener('abort', handleAbort, { once: true });
-  try {
-    const recognition = worker.recognize(image);
-    const result = signal ? await Promise.race([recognition, abortPromise]) : await recognition;
-    return filterEnglishOcrText(result.data.text);
-  } finally {
-    signal?.removeEventListener('abort', handleAbort);
-    await worker.terminate();
-  }
-}
-
 export async function recognizeImageLayout(
   image: File,
   crop: OcrCropPixels,

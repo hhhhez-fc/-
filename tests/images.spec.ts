@@ -4,7 +4,6 @@ import {
   filterEnglishOcrText,
   normalizeOcrText,
   processOcrLines,
-  recognizeImage,
   recognizeImageLayout,
   validateImageFile,
 } from '../src/domain/images';
@@ -256,7 +255,12 @@ describe('image import', () => {
 
   it('terminates the OCR worker when recognition is cancelled', async () => {
     const controller = new AbortController();
-    const promise = recognizeImage({} as File, undefined, controller.signal);
+    const promise = recognizeImageLayout(
+      {} as File,
+      { left: 0, top: 0, width: 1, height: 1 },
+      undefined,
+      controller.signal,
+    );
     while (!tesseract.createWorker.mock.calls.length) await Promise.resolve();
     await Promise.resolve();
     controller.abort();

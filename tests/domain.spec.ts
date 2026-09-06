@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { identifyExcelColumns, rowsToLabels } from '../src/domain/importing';
+import { identifyExcelColumns, rowsToLabelsWithColumns } from '../src/domain/importing';
 import {
   createLabel,
   defaultSizePresets,
@@ -9,7 +9,7 @@ import {
   validateSizePreset,
 } from '../src/domain/labels';
 import { parseQuantity } from '../src/domain/quantity';
-import { getPreviewScale, solveLabelTextLayout, solveTextLayout, validateLabelForPrint } from '../src/domain/layout';
+import { getPreviewScale, solveLabelTextLayout, validateLabelForPrint } from '../src/domain/layout';
 
 describe('Excel 表头识别', () => {
   it('规范化后识别含“唛头”与“数量/件数”的表头', () => {
@@ -21,7 +21,9 @@ describe('Excel 表头识别', () => {
   });
 
   it('将表格行转换为唛头记录，无效数量保留为不可打印的零值', () => {
-    const labels = rowsToLabels(['唛头', '数量'], [['箱唛 A', '3'], ['箱唛 B', '错误']], 'small');
+    const headers = ['唛头', '数量'];
+    const columns = identifyExcelColumns(headers);
+    const labels = rowsToLabelsWithColumns(headers, [['箱唛 A', '3'], ['箱唛 B', '错误']], 'small', columns);
     expect(labels.map(({ content, quantity, needsReview }) => ({ content, quantity, needsReview }))).toEqual([
       { content: '箱唛 A', quantity: 3, needsReview: false },
       { content: '箱唛 B', quantity: 0, needsReview: false },
@@ -285,51 +287,58 @@ describe('唛头排版', () => {
   });
 
   it('为可容纳的短文本返回可用字号', () => {
-    const result = solveTextLayout({
+    const label = createLabel({
       content: 'MADE IN CHINA',
-      widthMm: 100,
-      heightMm: 60,
-      paddingMm: 5,
-      maxFontSize: 56,
-      minFontSize: 12,
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
     });
+    label.style.fontMode = 'auto';
+    label.style.fontSizePt = defaultSizePresets[0].maxFontSize;
+    const result = solveLabelTextLayout(label, defaultSizePresets[0]);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.fontSize).toBeGreaterThanOrEqual(12);
+    if (result.ok) expect(result.fontSize).toBeGreaterThanOrEqual(defaultSizePresets[0].minFontSize);
   });
 
   it('当文本在最小字号仍无法完整显示时返回错误', () => {
-    const result = solveTextLayout({
+    const label = createLabel({
       content: 'THIS IS AN UNBREAKABLE_LABEL_TEXT_THAT_CANNOT_FIT',
-      widthMm: 10,
-      heightMm: 10,
-      paddingMm: 2,
-      maxFontSize: 16,
-      minFontSize: 12,
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
     });
+    label.style.fontMode = 'auto';
+    label.style.fontSizePt = 16;
+    const preset = { ...defaultSizePresets[1], widthMm: 10, heightMm: 10, paddingMm: 2, maxFontSize: 16, minFontSize: 12 };
+    const result = solveLabelTextLayout(label, preset);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: '内容在最小字号下仍无法完整显示',
+      lineLayouts: { [label.textLines[0].id]: { fontSizePt: 12 } },
     });
   });
 
-  it('固定字号溢出时保留原始文字并允许打印', () => {
-    const result = solveTextLayout({
-      content: 'VERY LONG SHIPPING MARK',
-      widthMm: 20,
-      heightMm: 10,
-      paddingMm: 2,
-      maxFontSize: 80,
-      minFontSize: 8,
-      fixedFontSize: 80,
-      lineHeight: 1.2,
+  it('固定字号排版保留原始分行', () => {
+    const label = createLabel({
+      content: 'VERY LONG SHIPPING MARK\nSECOND LINE',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
     });
+    label.style.fontMode = 'fixed';
+    label.style.fontSizePt = 16;
+    const result = solveLabelTextLayout(label, defaultSizePresets[0]);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
-      fontSize: 80,
-      lines: ['VERY LONG SHIPPING MARK'],
+      fontSize: 16,
+      lineLayouts: {
+        [label.textLines[0].id]: { fontSizePt: 16, fontScale: 1 },
+        [label.textLines[1].id]: { fontSizePt: 16, fontScale: 1 },
+      },
+      lines: ['VERY LONG SHIPPING MARK', 'SECOND LINE'],
     });
   });
 

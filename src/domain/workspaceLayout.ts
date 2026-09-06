@@ -117,21 +117,6 @@ export function hydrateWorkspaceLayout(value: unknown): WorkspaceLayout {
   return { version: 2, order, sizes };
 }
 
-export function reorderWorkspacePanels(
-  layout: WorkspaceLayout,
-  sourceId: WorkspacePanelId,
-  targetId: WorkspacePanelId,
-): WorkspaceLayout {
-  if (sourceId === targetId) return { ...layout, order: [...layout.order] };
-  const sourceIndex = layout.order.indexOf(sourceId);
-  const targetIndex = layout.order.indexOf(targetId);
-  if (sourceIndex < 0 || targetIndex < 0) return { ...layout, order: [...layout.order] };
-  const order = [...layout.order];
-  order.splice(sourceIndex, 1);
-  order.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, sourceId);
-  return { ...layout, order };
-}
-
 export function placeWorkspacePanel(
   layout: WorkspaceLayout,
   sourceId: WorkspacePanelId,

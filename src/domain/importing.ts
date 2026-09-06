@@ -145,9 +145,3 @@ export function rowsToLabelsWithColumns(
     })
     .filter((label): label is LabelRecord => label !== null);
 }
-
-export function rowsToLabels(headers: string[], rows: unknown[][], sizeType: string): LabelRecord[] {
-  const columns = identifyExcelColumns(headers);
-  if (columns.needsManualMapping) return [];
-  return rowsToLabelsWithColumns(headers, rows, sizeType, columns);
-}

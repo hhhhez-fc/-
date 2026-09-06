@@ -6,9 +6,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
 import { createInitialDraft } from '../src/domain/draft';
-import { rowsToLabels } from '../src/domain/importing';
+import { identifyExcelColumns, rowsToLabelsWithColumns } from '../src/domain/importing';
 import { createLabel, defaultSizePresets, type LabelRecord } from '../src/domain/labels';
-import { solveLabelTextLayout, solveTextLayout, validateLabelForPrint } from '../src/domain/layout';
+import { solveLabelTextLayout, validateLabelForPrint } from '../src/domain/layout';
 import * as imagesDomain from '../src/domain/images';
 import { createPrintPlan } from '../src/domain/printing';
 import { recordRecentLabels } from '../src/domain/history';
@@ -61,7 +61,9 @@ const mockBounds = (element: Element, width = 200, height = 120) => vi.spyOn(ele
 
 describe('最终审查回归', () => {
   it.each(['abc', '1001', '0', ''])('无效 Excel 数量 %j 持久化后仍阻止打印并可在列表纠正', async (quantity) => {
-    const [label] = rowsToLabels(['唛头', '数量'], [['FY', quantity]], 'small');
+    const headers = ['唛头', '数量'];
+    const columns = identifyExcelColumns(headers);
+    const [label] = rowsToLabelsWithColumns(headers, [['FY', quantity]], 'small', columns);
     const state = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
     saveDraft(window.localStorage, state);
     const restored = loadDraft(window.localStorage)!;
@@ -208,9 +210,14 @@ describe('最终审查回归', () => {
     expect(hydrated.textStyleRanges[0].style.fontSizePt).toBe(300);
   });
 
-  it('旧自动换行求解入口也限制巨大字号范围', () => {
-    expect(solveTextLayout({ content: 'A', widthMm: 70, heightMm: 45, paddingMm: 4,
-      maxFontSize: 1e20, minFontSize: 8 })).toMatchObject({ ok: true });
+  it('标签排版入口限制巨大字号范围', () => {
+    const label = labelFor('A');
+    label.style.fontMode = 'auto';
+    label.style.fontSizePt = 1e20;
+    const layout = solveLabelTextLayout(label, defaultSizePresets[1]);
+
+    expect(layout).toMatchObject({ ok: true });
+    expect(layout.fontSize).toBeLessThanOrEqual(300);
   });
 
   it('OCR 成功只返回可编辑内容与完成反馈，不新增人工校对状态', async () => {
