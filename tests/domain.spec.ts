@@ -342,6 +342,26 @@ describe('唛头排版', () => {
     });
   });
 
+  it('固定字号超长单行溢出时保留字号和原始文字', () => {
+    const label = createLabel({
+      content: 'VERY LONG SHIPPING MARK',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    });
+    label.style.fontMode = 'fixed';
+    label.style.fontSizePt = 80;
+    const preset = { ...defaultSizePresets[1], widthMm: 20, heightMm: 10, paddingMm: 2 };
+    const result = solveLabelTextLayout(label, preset);
+
+    expect(result).toMatchObject({
+      ok: true,
+      fontSize: 80,
+      lineLayouts: { [label.textLines[0].id]: { fontSizePt: 80, fontScale: 1 } },
+      lines: ['VERY LONG SHIPPING MARK'],
+    });
+  });
+
   it('打印前报告数量和内容问题，但不报告人工校对状态', () => {
     const label = createLabel({
       content: '   ',
