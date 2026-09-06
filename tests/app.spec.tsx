@@ -135,6 +135,37 @@ describe('唛头打印工作台', () => {
     expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: '搜索唛头' }));
   });
 
+  it('search copy paste undo and print keeps the complete printable draft', async () => {
+    const user = userEvent.setup();
+    const labels = ['BOX-A', 'CARTON-B', 'ENVELOPE-C'].map((content) => createLabel({
+      content,
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+    }));
+    render(<App initialState={{
+      ...createInitialDraft(),
+      labels,
+      activeLabelId: labels[0].id,
+      selectedLabelIds: [],
+    }} />);
+
+    await user.type(screen.getByRole('searchbox', { name: '搜索唛头' }), 'BOX');
+    await user.click(screen.getByRole('checkbox', { name: '选择第 1 条唛头' }));
+    await user.click(screen.getByRole('button', { name: '复制所选' }));
+    await user.click(screen.getByRole('button', { name: '清空搜索' }));
+    await user.click(screen.getByRole('button', { name: '粘贴' }));
+    expect(screen.getByText('已粘贴 1 条唛头')).toBeTruthy();
+    await user.keyboard('{Control>}z{/Control}');
+    expect(screen.getByText('已撤销：粘贴 1 条唛头')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: '检查并打印' }));
+    const printDialog = screen.getByRole('dialog');
+    expect(printDialog.textContent).toContain('BOX-A');
+    expect(printDialog.textContent).toContain('CARTON-B');
+    expect(printDialog.textContent).toContain('ENVELOPE-C');
+  });
+
   it('copies and repeatedly pastes an independent selected record', async () => {
     const user = userEvent.setup();
     const label = createLabel({ content: 'COPY-ME', quantity: 1, source: 'manual', needsReview: false });
@@ -195,6 +226,23 @@ describe('唛头打印工作台', () => {
     await user.click(search);
     await user.keyboard('{Control>}z{/Control}');
     expect((screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('exposes native disabled states, live search count, and restores help focus', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<App initialState={createInitialDraft()} />);
+    const undo = screen.getByRole('button', { name: '撤销上一步，Ctrl+Z' }) as HTMLButtonElement;
+    const redo = screen.getByRole('button', { name: '重做上一步，Ctrl+Y' }) as HTMLButtonElement;
+    const help = screen.getByRole('button', { name: '快捷键帮助，F1' });
+
+    expect(undo.disabled).toBe(true);
+    expect(redo.disabled).toBe(true);
+    expect(container.querySelector('.record-search [aria-live="polite"]')).toBeTruthy();
+    await user.click(help);
+    expect(screen.getByText('Ctrl / ⌘ + C')).toBeTruthy();
+    expect(screen.getByText('Ctrl / ⌘ + Shift + Z')).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(document.activeElement).toBe(help);
   });
 
   it('traps shortcut-help focus, makes the workspace inert, and restores the trigger', async () => {

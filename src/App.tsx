@@ -295,7 +295,10 @@ export default function App({ initialState }: AppProps) {
     const result = buildPasteAction(state, clipboard, () => crypto.randomUUID());
     if (!result || !clipboard) return;
     const isCut = clipboard.mode === 'cut';
-    applyDraft(result.action, isCut ? '移动剪切的唛头' : '粘贴复制的唛头');
+    applyDraft(
+      result.action,
+      isCut ? `移动 ${result.pastedIds.length} 条唛头` : `粘贴 ${result.pastedIds.length} 条唛头`,
+    );
     if (isCut) setClipboard(null);
     setStatus(isCut
       ? `已移动 ${result.pastedIds.length} 条唛头`

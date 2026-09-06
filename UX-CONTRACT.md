@@ -18,6 +18,7 @@
 | 尺寸、字体和样式 | `docs/superpowers/specs/2026-08-28-label-printing-webapp-design.md` | 用户确认规格 | 2026-08-28 |
 | 隐私和存储 | 同上 | 用户确认规格 | 2026-08-28 |
 | 打印流程、多行编辑、历史与旋转 | `docs/superpowers/specs/2026-09-04-print-workflow-and-multiline-editing-design.md` | 用户逐节确认规格 | 2026-09-04 |
+| 记录搜索、撤销重做、应用内剪贴板与快捷键 | `docs/superpowers/specs/2026-09-06-workbench-productivity-and-dead-code-design.md` | 用户确认规格 | 2026-09-06 |
 
 ## Visual contract
 
@@ -44,6 +45,10 @@
 | Multiline Selection | `App` 临时选择状态 + `textLines` 纯函数 + `LabelPreview` | 本合同 | 累加选择 / 空白清除 / 整组移动 | 纯函数 + 组件 + 浏览器 |
 | Preview History | `history` 纯函数 + `SourceHistory` + `draftReducer` | 本合同 | 最近 20 条 / 去重 / 再次使用 | 水合 + 完整流程 |
 | Print Rotation | `printRotation` 纯函数 + `PrintReviewDialog` / `PrintPages` / `PrintTextLayer` | 本合同 | 整块文字 `0/90/180/270`，换行、相对布局和字号固定 | 纯函数 + 打印 DOM + 浏览器 |
+| Record Search | `RecordSearch` + `labelSearch` | 本合同 | 内容本地、大小写不敏感过滤；清空后搜索框仍获得焦点 | `tests/app.spec.tsx` + 浏览器 |
+| Draft History | `draftHistory` + `App` | 本合同 | 最近 100 步、撤销 / 重做与含数量的操作反馈 | `tests/draft-history.spec.ts` + `tests/app.spec.tsx` |
+| Record Clipboard | `workspaceClipboard` + `LabelList` + `App` | 本合同 | 复制生成独立新 ID；剪切仅在粘贴时移动；粘贴后可撤销 | `tests/workspace-clipboard.spec.ts` + `tests/app.spec.tsx` |
+| Shortcut Help | `shortcutKeys` + `ShortcutHelpDialog` | 本合同 | Ctrl 或 ⌘；编辑字段保留原生快捷键；F1 帮助、Escape 关闭或取消剪切 | `tests/shortcut-keys.spec.ts` + `tests/app.spec.tsx` |
 
 ## Component behavior
 
@@ -97,6 +102,10 @@
 | Preview / remember | 当前唛头“打印预览”或顶部“检查并打印” | 同步筛选合法唛头 | 打印检查对话框 | 合法快照立即写入最近历史、去重并限制 20 条 | 阻塞项不写历史；存储失败不阻止对话框 | 对话框关闭后回触发按钮 | 用户浏览器批注确认 |
 | Restore history | “再次使用” | 同步深拷贝 | 当前列表与编辑器 | 新建唛头/文字行 ID，并恢复历史尺寸快照 | 同 ID 尺寸冲突时新建预设 ID | 新副本编辑器 | 用户浏览器批注确认 |
 | Rotate print text | 打印检查中“旋转 90°” | 整块唛头文字围绕内容中心旋转，纸张和打印区域不旋转 | 同一对话框 | 缩略图与打印 DOM 同步按 `0/90/180/270` 循环；每行仍为完整字符串，换行、相对队形、字号和纸张宽高不变 | 图片不旋转；关闭对话框清零 | 保持旋转按钮焦点 | 用户确认（2026-09-06） |
+| Search | 输入“搜索唛头”或 Ctrl / ⌘ + F | 本地同步过滤内容，不修改草稿或打印范围 | 当前列表 | `已显示 / 总数` live region；无结果显示稳定说明 | 清空搜索恢复完整列表 | 清空后回到搜索框；Ctrl / ⌘ + F 聚焦搜索框 | 2026-09-06 设计规格 |
+| Undo / Redo | 顶部按钮、Ctrl / ⌘ + Z、Ctrl + Y 或 Ctrl / ⌘ + Shift + Z | 本地快照切换，不触发存储读取 | 当前草稿 | 状态区报告“已撤销 / 已重做：操作名”；无可用步骤时按钮原生禁用 | 输入字段保留浏览器原生快捷键 | 保持当前焦点；按钮具有可访问名称 | 2026-09-06 设计规格 |
+| Copy / Cut / Paste | 记录操作栏或 Ctrl / ⌘ + C/X/V | 复制或剪切暂存在应用内；剪切显示“待剪切” | 当前列表、活动记录之后 | 复制、粘贴或移动的精确条数；粘贴/移动作为单个可撤销步骤 | Escape 取消待剪切；目标消失时不执行移动 | 保持操作触发器；剪贴板暂存不写入历史 | 2026-09-06 设计规格 |
+| Shortcut Help | 顶部“快捷键”或 F1 | 对话框打开，背景 inert 且页面滚动锁定 | 快捷键帮助对话框 | 展示跨平台 Ctrl / ⌘ 组合键 | Escape 或关闭按钮关闭 | 对话框聚焦关闭按钮，关闭后回到触发器 | 2026-09-06 设计规格 |
 | Print | “打印这一组” | 显示程序生成张数，并提示系统打印份数保持 1 | 系统打印窗口 | 显示 `1 × 程序生成张数 = 实际打印张数`；打印页始终使用记录的原始纸张宽高，字号保持 100% | 取消系统打印后保留当前草稿 | 返回打印检查触发按钮 | 用户确认需求 |
 | Remember print size | 点击“打印这一组” | 同步记录该组宽高 | 原位置 | 之后从手动、Excel 或图片新增时采用该宽高 | 仅编辑宽高不更新默认值 | 保持打印动作焦点 | 用户浏览器批注确认 |
 | Delete | 删除此项 | 即时本地更新 | 列表 | 状态区确认 | 不适用 | 下一条或新增按钮 | 设计规格 |

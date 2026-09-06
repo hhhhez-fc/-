@@ -15,14 +15,22 @@
     "Quantity Stepper",
     "Multiline Selection",
     "Preview History",
-    "Print Rotation"
+    "Print Rotation",
+    "Record Search",
+    "Draft History",
+    "Record Clipboard",
+    "Shortcut Help"
   ],
   "ownership": {
     "Select/Listbox": "native",
     "Quantity Stepper": "authored",
     "Multiline Selection": "authored",
     "Preview History": "authored",
-    "Print Rotation": "authored"
+    "Print Rotation": "authored",
+    "Record Search": "authored",
+    "Draft History": "authored",
+    "Record Clipboard": "authored",
+    "Shortcut Help": "authored"
   },
   "requiredCommands": ["unit", "accessibility", "typecheck", "build"],
   "commands": {
@@ -38,6 +46,11 @@
     "multilineSelection": "tests/multiline-interactions.spec.tsx",
     "previewHistory": "tests/app.spec.tsx",
     "printRotation": "tests/app.spec.tsx",
+    "recordSearch": "tests/app.spec.tsx",
+    "draftHistory": "tests/draft-history.spec.ts",
+    "recordClipboard": "tests/workspace-clipboard.spec.ts",
+    "shortcutHelp": "tests/shortcut-keys.spec.ts",
+    "productivityWorkflow": "tests/app.spec.tsx",
     "excelRegionMerge": "tests/excel-import.spec.ts",
     "shrinkOnlyLayout": "tests/domain.spec.ts",
     "accessibility": "tests/accessibility.spec.tsx"
