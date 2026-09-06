@@ -11,7 +11,3 @@ export function placementTransform(placement: TextPlacement): string {
   const y = placement.verticalSnap === 'top' ? '0%' : placement.verticalSnap === 'bottom' ? '-100%' : '-50%';
   return `translate(${x}, ${y})`;
 }
-
-export function textRotationTransform(placement: TextPlacement, rotation: PrintRotation): string {
-  return `${placementTransform(placement)} rotate(${rotation}deg)`;
-}
