@@ -84,7 +84,7 @@ export default function ExcelImporter({ sizePresetId, purpose, onImport, onStatu
     }
     try {
       onStatus('正在读取 Excel…');
-      const parsed = parseWorkbook(await file.arrayBuffer());
+      const parsed = await parseWorkbook(await file.arrayBuffer());
       if (!parsed.sheets.length || parsed.sheets.every((sheet) => sheet.headers.length === 0)) {
         throw new Error('工作簿没有可读取的工作表');
       }

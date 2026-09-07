@@ -35,7 +35,7 @@ const selectRange = async (start: HTMLElement, end: HTMLElement = start) => {
 };
 
 describe('Excel 工作簿导入', () => {
-  it('保留工作表名称、表头和数据行供用户选择', () => {
+  it('保留工作表名称、表头和数据行供用户选择', async () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
       workbook,
@@ -49,7 +49,7 @@ describe('Excel 工作簿导入', () => {
     );
     const data = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
 
-    expect(parseWorkbook(data)).toEqual({
+    await expect(parseWorkbook(data)).resolves.toEqual({
       sheets: [
         { name: '外箱唛头', headers: ['唛头', '数量'], rows: [['FY-01', '3']] },
         { name: '信封', headers: ['内容', '件数'], rows: [['ENVELOPE', '1']] },
