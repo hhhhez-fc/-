@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { createLabel, type LabelPurpose, type LabelRecord } from './labels';
 import { parseQuantity } from './quantity';
 
@@ -104,7 +103,8 @@ export function regionsToLabel(
   });
 }
 
-export function parseWorkbook(data: ArrayBuffer | Uint8Array): ParsedWorkbook {
+export async function parseWorkbook(data: ArrayBuffer | Uint8Array): Promise<ParsedWorkbook> {
+  const XLSX = await import('xlsx');
   const workbook = XLSX.read(data, { type: 'array' });
   const sheets = workbook.SheetNames.map((name) => {
     const matrix = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], {
