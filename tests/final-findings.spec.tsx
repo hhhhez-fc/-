@@ -145,6 +145,18 @@ describe('最终审查回归', () => {
     expect(html.match(/<section class="print-page"/g)).toHaveLength(1);
   });
 
+  it('打印检查缩略图完整显示超出纸张预览边界的文字', () => {
+    const label = labelFor('MCV');
+    label.style.fontSizePt = 300;
+    const preset = defaultSizePresets[1];
+
+    const { container } = render(
+      <PrintLabelThumbnail label={label} preset={preset} rotation={90} />,
+    );
+
+    expect((container.querySelector('.print-label-thumbnail') as HTMLElement).style.overflow).toBe('visible');
+  });
+
   it('文字方向键只移动选中行，打印区域和未选行保持物理位置', () => {
     render(<PreviewHarness />);
     const original = currentLabel();

@@ -20,6 +20,7 @@ export default function PrintLabelThumbnail({ label, preset, rotation }: PrintLa
   const paperStyle: CSSProperties = {
     width: `${THUMBNAIL_WIDTH_PX}px`,
     aspectRatio: `${preset.widthMm} / ${preset.heightMm}`,
+    overflow: 'visible',
     fontFamily: label.style.fontFamily,
     fontWeight: label.style.fontWeight,
     fontStyle: label.style.italic ? 'italic' : 'normal',
