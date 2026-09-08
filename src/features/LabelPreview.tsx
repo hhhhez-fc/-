@@ -99,6 +99,17 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
   const patchLine = (line: LabelTextLine, patch: Partial<Omit<LabelTextLine, 'id' | 'text'>>) => {
     onChange({ textLines: updateTextLine(label.textLines, line.id, patch) });
   };
+  const resizeLineFont = (line: LabelTextLine, fontSizePt: number) => {
+    const textLines = updateTextLine(label.textLines, line.id, {
+      style: { ...line.style, fontSizePt },
+    });
+    onChange(label.textLines.length === 1
+      ? {
+        style: { ...label.style, fontMode: 'fixed', fontSizePt },
+        textLines,
+      }
+      : { textLines });
+  };
   const updatePrintAreaFromPointer = (event: PointerEvent<HTMLElement>) => {
     const start = printAreaDragRef.current;
     const bounds = paperRef.current?.getBoundingClientRect();
@@ -182,7 +193,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
       deltaX: event.clientX - start.clientX,
       deltaY: event.clientY - start.clientY,
     });
-    patchLine(line, { style: { ...line.style, fontSizePt: nextFontSize } });
+    resizeLineFont(line, nextFontSize);
   };
   const finishTextResize = (event: PointerEvent<HTMLSpanElement>) => {
     event.stopPropagation();
@@ -198,7 +209,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     event.stopPropagation();
     const amount = event.shiftKey ? 5 : 1;
     const current = line.style.fontSizePt ?? label.style.fontSizePt;
-    patchLine(line, { style: { ...line.style, fontSizePt: Math.max(MIN_FONT_SIZE_PT, Math.min(MAX_FONT_SIZE_PT, current + direction * amount)) } });
+    resizeLineFont(line, Math.max(MIN_FONT_SIZE_PT, Math.min(MAX_FONT_SIZE_PT, current + direction * amount)));
   };
   const startEditing = (line: LabelTextLine) => {
     onActiveLineChange(line.id);

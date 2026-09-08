@@ -33,6 +33,7 @@ import WorkspacePanel from './features/WorkspacePanel';
 import { buildFontSizePreviewLabel, type FontSizeChoice } from './domain/fontSizePreview';
 import { hasSameSizePresetSnapshot, restoreRecentLabel, type RecentLabelEntry } from './domain/history';
 import { nextPrintRotation, type PrintRotation } from './domain/printRotation';
+import { resolvePrintPageGeometry, type PrintLayout } from './domain/printLayout';
 import { filterLabelsByQuery } from './domain/labelSearch';
 import {
   buildPasteAction,
@@ -63,8 +64,9 @@ export default function App({ initialState }: AppProps) {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printPreviewLabelId, setPrintPreviewLabelId] = useState<string | null>(null);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
-  const [activePrintGroup, setActivePrintGroup] = useState<PrintGroup | null>(null);
+  const [activePrintJob, setActivePrintJob] = useState<null | { group: PrintGroup; layout: PrintLayout }>(null);
   const [printRotations, setPrintRotations] = useState<Record<string, PrintRotation>>({});
+  const [printLayouts, setPrintLayouts] = useState<Record<string, PrintLayout>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [selectedLineIds, setSelectedLineIds] = useState<string[]>([]);
   const [fontSizePreview, setFontSizePreview] = useState<null | { labelId: string; choice: FontSizeChoice }>(null);
@@ -164,8 +166,8 @@ export default function App({ initialState }: AppProps) {
   }, [warnBeforeUnload]);
 
   useEffect(() => {
-    if (!activePrintGroup || typeof window === 'undefined') return;
-    const handleAfterPrint = () => setActivePrintGroup(null);
+    if (!activePrintJob || typeof window === 'undefined') return;
+    const handleAfterPrint = () => setActivePrintJob(null);
     window.addEventListener('afterprint', handleAfterPrint, { once: true });
     const firstFrame = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => window.print());
@@ -174,7 +176,7 @@ export default function App({ initialState }: AppProps) {
       window.cancelAnimationFrame(firstFrame);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [activePrintGroup]);
+  }, [activePrintJob]);
 
   const addManualLabel = () => {
     const sizeType = defaultSizeTypeForBusiness(state.business);
@@ -205,6 +207,7 @@ export default function App({ initialState }: AppProps) {
     setPrintDialogOpen(false);
     setPrintPreviewLabelId(null);
     setPrintRotations({});
+    setPrintLayouts({});
   }, []);
   const closeShortcutHelp = useCallback(() => setShortcutHelpOpen(false), []);
   const rotatePrintedLabel = useCallback((id: string) => {
@@ -739,24 +742,34 @@ export default function App({ initialState }: AppProps) {
       open={printDialogOpen}
       plan={printDialogPlan}
       rotations={printRotations}
+      layouts={printLayouts}
       onRotateLabel={rotatePrintedLabel}
+      onLayoutChange={(groupKey, layout) => setPrintLayouts((current) => ({
+        ...current,
+        [groupKey]: layout,
+      }))}
       onClose={closePrintDialog}
       onEditLabel={(id) => {
         activateLabel(id);
         closePrintDialog();
       }}
-      onPrintGroup={(group) => {
+      onPrintGroup={(group, layout) => {
+        const pageGeometry = resolvePrintPageGeometry(group.widthMm, group.heightMm, layout);
         applyDraft(
-          { type: 'remember-printed-size', widthMm: group.widthMm, heightMm: group.heightMm },
+          { type: 'remember-printed-size', widthMm: pageGeometry.widthMm, heightMm: pageGeometry.heightMm },
           '记录上次打印尺寸',
           false,
         );
-        setActivePrintGroup(group);
-        setStatus(`正在打开 ${group.sizeLabel} 的打印设置；系统打印份数请保持 1`);
+        setActivePrintJob({ group, layout });
+        setStatus(`正在打开 ${pageGeometry.sizeLabel} 的打印设置；系统打印份数请保持 1`);
       }}
     />
     <ShortcutHelpDialog open={shortcutHelpOpen} onClose={closeShortcutHelp} />
-    <PrintPages group={activePrintGroup} rotations={printRotations} />
+    <PrintPages
+      group={activePrintJob?.group ?? null}
+      layout={activePrintJob?.layout}
+      rotations={printRotations}
+    />
     </>
   );
 }

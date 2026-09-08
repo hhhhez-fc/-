@@ -42,7 +42,9 @@ describe('打印文字旋转', () => {
       open
       plan={plan}
       rotations={{ [first.id]: 90 }}
+      layouts={{}}
       onRotateLabel={() => undefined}
+      onLayoutChange={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}
@@ -94,7 +96,9 @@ describe('打印文字旋转', () => {
       open
       plan={plan}
       rotations={{ [label.id]: 90 }}
+      layouts={{}}
       onRotateLabel={() => undefined}
+      onLayoutChange={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}
@@ -119,7 +123,9 @@ describe('打印文字旋转', () => {
       open
       plan={plan}
       rotations={{}}
+      layouts={{}}
       onRotateLabel={() => undefined}
+      onLayoutChange={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}

@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PrintGroup, PrintPlan } from '../domain/printing';
+import {
+  defaultPrintLayout,
+  resolvePrintPageGeometry,
+  type PrintLayout,
+} from '../domain/printLayout';
 import type { PrintRotation } from '../domain/printRotation';
 import PrintLabelThumbnail from './PrintLabelThumbnail';
 
@@ -7,10 +12,12 @@ interface PrintReviewDialogProps {
   open: boolean;
   plan: PrintPlan;
   rotations: Record<string, PrintRotation>;
+  layouts: Record<string, PrintLayout>;
   onClose: () => void;
   onEditLabel: (id: string) => void;
   onRotateLabel: (id: string) => void;
-  onPrintGroup: (group: PrintGroup) => void;
+  onLayoutChange: (groupKey: string, layout: PrintLayout) => void;
+  onPrintGroup: (group: PrintGroup, layout: PrintLayout) => void;
 }
 
 function getUniquePages(group: PrintGroup) {
@@ -35,20 +42,22 @@ export default function PrintReviewDialog({
   open,
   plan,
   rotations,
+  layouts,
   onClose,
   onEditLabel,
   onRotateLabel,
+  onLayoutChange,
   onPrintGroup,
 }: PrintReviewDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [copyStatus, setCopyStatus] = useState('');
 
-  const copyPaperSize = async (group: PrintGroup) => {
-    const copied = await copyPaperSizeToClipboard(group.sizeLabel);
+  const copyPaperSize = async (sizeLabel: string) => {
+    const copied = await copyPaperSizeToClipboard(sizeLabel);
     setCopyStatus(copied
-      ? `已复制 ${group.sizeLabel}，请粘贴到打印机的自定义纸张尺寸设置中。`
-      : `复制失败，请手动输入 ${group.sizeLabel}。`);
+      ? `已复制 ${sizeLabel}，请粘贴到打印机的自定义纸张尺寸设置中。`
+      : `复制失败，请手动输入 ${sizeLabel}。`);
   };
 
   useEffect(() => {
@@ -64,7 +73,9 @@ export default function PrintReviewDialog({
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled])'));
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), select:not([disabled])',
+      ));
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -130,13 +141,17 @@ export default function PrintReviewDialog({
               <strong id="print-paper-guide-title">系统打印使用自定义纸张</strong>
               <ol>
                 <li>打开“打印机首选项”，创建与下方完全相同的用户自定义纸张。</li>
-                <li>在系统打印窗口选择该纸张，缩放保持 100%，边距选择“无”。</li>
+                <li>先在下方选择页面布局；系统打印窗口保持相同方向，缩放保持 100%，边距选择“无”。</li>
                 <li>这里会把整块唛头文字旋转；换行、字号和纸张尺寸保持不变。</li>
                 <li>不要选择 A4 或信纸代替，否则内容会缩放或产生大片留白。</li>
               </ol>
             </aside>
             <p className="print-copy-feedback" role="status" aria-live="polite">{copyStatus}</p>
             {groupPreviews.map(({ group, uniquePages }, index) => {
+              const layout = layouts[group.key] ?? defaultPrintLayout(group.widthMm, group.heightMm);
+              const pageGeometry = resolvePrintPageGeometry(group.widthMm, group.heightMm, layout);
+              const landscapeGeometry = resolvePrintPageGeometry(group.widthMm, group.heightMm, 'landscape');
+              const portraitGeometry = resolvePrintPageGeometry(group.widthMm, group.heightMm, 'portrait');
               return (
                 <article key={group.key}>
                   <span className="print-group-index">{String(index + 1).padStart(2, '0')}</span>
@@ -145,18 +160,29 @@ export default function PrintReviewDialog({
                     <p>{`1 × 程序生成 ${group.pages.length} 张 = 实际打印 ${group.pages.length} 张`}</p>
                   </div>
                   <div className="print-group-actions">
+                    <label className="print-layout-field">
+                      <span>页面布局</span>
+                      <select
+                        aria-label={`${group.sizeLabel} 页面布局`}
+                        value={layout}
+                        onChange={(event) => onLayoutChange(group.key, event.target.value as PrintLayout)}
+                      >
+                        <option value="landscape">横向（{landscapeGeometry.sizeLabel}）</option>
+                        <option value="portrait">纵向（{portraitGeometry.sizeLabel}）</option>
+                      </select>
+                    </label>
                     <button
                       className="button button-quiet button-compact"
                       type="button"
-                      aria-label={`复制 ${group.sizeLabel}`}
-                      onClick={() => void copyPaperSize(group)}
+                      aria-label={`复制 ${pageGeometry.sizeLabel}`}
+                      onClick={() => void copyPaperSize(pageGeometry.sizeLabel)}
                     >
                       复制尺寸
                     </button>
                     <button
                       className="button button-print"
                       type="button"
-                      onClick={() => onPrintGroup(group)}
+                      onClick={() => onPrintGroup(group, layout)}
                     >
                       打印这一组
                     </button>
@@ -181,7 +207,7 @@ export default function PrintReviewDialog({
                                 <span>当前 {rotation}°</span>
                               </div>
                             ) : <span>图片保持原方向</span>}
-                            <span>输出纸张 {preset.widthMm} × {preset.heightMm} mm</span>
+                            <span>输出纸张 {pageGeometry.sizeLabel}</span>
                           </div>
                         </div>
                       );

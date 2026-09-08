@@ -9,6 +9,7 @@ import { createLabel } from '../src/domain/labels';
 import { DRAFT_STORAGE_KEY } from '../src/domain/storage';
 
 beforeAll(() => {
+  Object.defineProperty(window, 'PointerEvent', { configurable: true, value: MouseEvent });
   Object.defineProperties(HTMLElement.prototype, {
     hasPointerCapture: { configurable: true, value: () => false },
     setPointerCapture: { configurable: true, value: () => undefined },
@@ -34,6 +35,47 @@ const stateWithLabel = (content: string) => {
 };
 
 describe('多行文字交互', () => {
+  it('单行文字通过缩放手柄改变字号时同步更新全部字号', () => {
+    const state = stateWithLabel('ONLY-LINE');
+    state.labels[0].style.fontMode = 'auto';
+    render(<App initialState={state} />);
+
+    const resizeHandle = screen.getAllByRole('slider', { name: /调整第 1 行文字大小/ })[0];
+    fireEvent.keyDown(resizeHandle, { key: 'ArrowUp' });
+
+    expect((screen.getByRole('spinbutton', { name: '全部字号' }) as HTMLInputElement).value).toBe('27');
+  });
+
+  it('单行文字用鼠标拖动右下缩放手柄时同步实际字号', () => {
+    const state = stateWithLabel('ONLY-LINE');
+    state.labels[0].style.fontMode = 'auto';
+    render(<App initialState={state} />);
+
+    const resizeHandle = screen.getByRole('slider', { name: /从右下调整第 1 行文字大小/ });
+    Object.defineProperty(resizeHandle.parentElement, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 100, height: 20, left: 0, top: 0, right: 100, bottom: 20, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    fireEvent.pointerDown(resizeHandle, { pointerId: 1, clientX: 100, clientY: 20 });
+    fireEvent.pointerMove(resizeHandle, { pointerId: 1, clientX: 120, clientY: 24 });
+
+    expect((screen.getByRole('spinbutton', { name: '全部字号' }) as HTMLInputElement).value).toBe('31');
+    expect(resizeHandle.getAttribute('aria-valuenow')).toBe('31');
+  });
+
+  it('多行文字缩放单行时不覆盖全部字号和其他行', () => {
+    render(<App initialState={stateWithLabel('FIRST\nSECOND')} />);
+
+    const resizeHandle = screen.getAllByRole('slider', { name: /调整第 1 行文字大小/ })[0];
+    fireEvent.keyDown(resizeHandle, { key: 'ArrowUp' });
+
+    expect((screen.getByRole('spinbutton', { name: '全部字号' }) as HTMLInputElement).value).toBe('26');
+    expect(resizeHandle.getAttribute('aria-valuenow')).toBe('27');
+    const lines = screen.getAllByRole('button', { name: /拖动第 \d 行/ });
+    expect(parseFloat(lines[0].style.fontSize)).toBeCloseTo(36, 3);
+    expect(parseFloat(lines[1].style.fontSize)).toBeCloseTo(34.667, 3);
+  });
+
   it('textarea 内移动光标或选中文字只切换活动行，不进入累加选择', async () => {
     const user = userEvent.setup();
     render(<App initialState={stateWithLabel('AB\nC')} />);

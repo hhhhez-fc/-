@@ -611,7 +611,9 @@ describe('打印检查', () => {
       open
       plan={plan}
       rotations={{}}
+      layouts={{}}
       onRotateLabel={() => undefined}
+      onLayoutChange={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}
@@ -634,7 +636,9 @@ describe('打印检查', () => {
       open
       plan={plan}
       rotations={{}}
+      layouts={{}}
       onRotateLabel={() => undefined}
+      onLayoutChange={() => undefined}
       onClose={() => undefined}
       onEditLabel={() => undefined}
       onPrintGroup={() => undefined}

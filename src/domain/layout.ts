@@ -156,14 +156,15 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
 
   for (const index of printableLineIndexes) {
     const requested = requestedLineSize(label, index);
-    const candidates = usesFixedFontSize ? [requested] : fontSizeCandidates(requested, preset.minFontSize);
+    const usesFixedLineSize = usesFixedFontSize || label.textLines[index].style.fontSizePt !== undefined;
+    const candidates = usesFixedLineSize ? [requested] : fontSizeCandidates(requested, preset.minFontSize);
     const resolved = candidates.find((candidate) => {
       const fontScale = candidate / requested;
       const rect = scaledLineRect(label, index, candidate, fontScale, width, height);
       return scaledRectFitsBounds(rect, width, height);
     });
     if (resolved === undefined) {
-      const fallbackFontSize = usesFixedFontSize
+      const fallbackFontSize = usesFixedLineSize
         ? requested
         : Math.min(requested, clampFontSizePt(preset.minFontSize));
       lineLayouts[label.textLines[index].id] = {
@@ -171,7 +172,7 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
         fontScale: fallbackFontSize / requested,
       };
       rects.push(scaledLineRect(label, index, fallbackFontSize, fallbackFontSize / requested, width, height));
-      firstOverflowFontSize ??= fallbackFontSize;
+      if (!usesFixedLineSize) firstOverflowFontSize ??= fallbackFontSize;
       continue;
     }
     const fontScale = resolved / requested;
@@ -182,7 +183,7 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
   const fontSize = printableLineIndexes.length > 0
     ? lineLayouts[label.textLines[printableLineIndexes[0]].id].fontSizePt
     : label.style.fontSizePt;
-  if (firstOverflowFontSize !== undefined && !usesFixedFontSize) {
+  if (firstOverflowFontSize !== undefined) {
     return {
       ok: false,
       error: '内容在最小字号下仍无法完整显示',

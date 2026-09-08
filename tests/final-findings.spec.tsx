@@ -184,6 +184,24 @@ describe('最终审查回归', () => {
     expect(parseFloat(thumbnail.style.fontSize)).toBeCloseTo(36.286, 3);
   });
 
+  it('拖动设置的行字号按实际 pt 打印，不再被自动适配缩小', () => {
+    const label = labelFor('MMMM');
+    label.style.fontMode = 'auto';
+    label.textLines[0].style.fontSizePt = 80;
+    label.printArea = { leftMm: 20, topMm: 10, widthMm: 30, heightMm: 20 };
+    const preset = defaultSizePresets[1];
+
+    const layout = solveLabelTextLayout(label, preset);
+    const group = createPrintPlan([label], [preset]).groups[0];
+    const html = renderToStaticMarkup(<PrintPages group={group} />);
+
+    expect(layout).toMatchObject({
+      ok: true,
+      lineLayouts: { [label.textLines[0].id]: { fontSizePt: 80, fontScale: 1 } },
+    });
+    expect(html).toContain('font-size:80pt');
+  });
+
   it.each([1e20, Number.MAX_VALUE])('字号求解对巨大有限值 %j 保持有界', (fontSizePt) => {
     const label = labelFor('A');
     label.style.fontSizePt = fontSizePt;
