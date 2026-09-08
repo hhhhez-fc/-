@@ -39,6 +39,7 @@ describe('print planning', () => {
       sizePresetId: 'small',
     });
     label.style.fontSizePt = 300;
+    label.style.fontMode = 'fixed';
 
     const plan = createPrintPlan([label], defaultSizePresets);
 

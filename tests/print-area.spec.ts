@@ -17,12 +17,12 @@ type PrintAreaApi = {
 const printArea = placement as unknown as PrintAreaApi;
 
 describe('内容打印区域', () => {
-  it('旧记录默认使用纸张内边距范围', () => {
+  it('未自定义时默认铺满整张纸的打印范围', () => {
     expect(printArea.resolvePrintArea(undefined, { widthMm: 70, heightMm: 45, paddingMm: 4 })).toEqual({
-      leftMm: 4,
-      topMm: 4,
-      widthMm: 62,
-      heightMm: 37,
+      leftMm: 0,
+      topMm: 0,
+      widthMm: 70,
+      heightMm: 45,
     });
   });
 

@@ -47,6 +47,9 @@ function hydrateDraft(parsed: DraftState): DraftState {
       }));
   const labels = sourceLabels.map((label) => {
     const legacy = label as Partial<LabelRecord>;
+    const fontMode = legacy.style?.fontMode === 'auto' || legacy.style?.fontMode === 'fixed'
+      ? legacy.style.fontMode
+      : 'fixed';
     const requestedSizePresetId = legacy.sizePresetId ?? legacy.sizeType ?? 'small';
     const sizePresetId = validPresetIds.has(requestedSizePresetId)
       ? requestedSizePresetId
@@ -58,7 +61,7 @@ function hydrateDraft(parsed: DraftState): DraftState {
       sides: legacy.sides ?? 1,
       sizeType: legacy.sizeType ?? (sizePresetId === 'large' ? 'large' : 'small'),
       sizePresetId,
-      style: { ...normalizeInlineFontSize({ ...defaultStyle, ...legacy.style }), fontMode: 'fixed' },
+      style: { ...normalizeInlineFontSize({ ...defaultStyle, ...legacy.style }), fontMode },
       textStyleRanges: Array.isArray(legacy.textStyleRanges)
         ? legacy.textStyleRanges.map((range) => ({ ...range, style: normalizeInlineFontSize(range.style) }))
         : [],

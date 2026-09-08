@@ -200,7 +200,11 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     textResizeRef.current = null;
   };
-  const resizeTextWithKeyboard = (line: LabelTextLine, event: KeyboardEvent<HTMLSpanElement>) => {
+  const resizeTextWithKeyboard = (
+    line: LabelTextLine,
+    renderedFontSizePt: number,
+    event: KeyboardEvent<HTMLSpanElement>,
+  ) => {
     const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight'
       ? 1
       : event.key === 'ArrowDown' || event.key === 'ArrowLeft' ? -1 : 0;
@@ -208,8 +212,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
     event.preventDefault();
     event.stopPropagation();
     const amount = event.shiftKey ? 5 : 1;
-    const current = line.style.fontSizePt ?? label.style.fontSizePt;
-    resizeLineFont(line, Math.max(MIN_FONT_SIZE_PT, Math.min(MAX_FONT_SIZE_PT, current + direction * amount)));
+    resizeLineFont(line, Math.max(MIN_FONT_SIZE_PT, Math.min(MAX_FONT_SIZE_PT, renderedFontSizePt + direction * amount)));
   };
   const startEditing = (line: LabelTextLine) => {
     onActiveLineChange(line.id);
@@ -237,6 +240,9 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
   };
   const activeLine = label.textLines.find((line) => line.id === activeLineId) ?? label.textLines[0];
   const activeIndex = Math.max(0, label.textLines.findIndex((line) => line.id === activeLine?.id));
+  const activeRenderedFontSize = activeLine
+    ? layout?.lineLayouts?.[activeLine.id]?.fontSizePt ?? activeLine.style.fontSizePt ?? label.style.fontSizePt
+    : label.style.fontSizePt;
   const showDirectEntry = label.contentType === 'text'
     && (!label.content.trim() || directEntryLabelId === label.id);
 
@@ -368,8 +374,8 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
                 aria-label={`从${handle === 'nw' ? '左上' : handle === 'ne' ? '右上' : handle === 'se' ? '右下' : '左下'}调整第 ${index + 1} 行文字大小；方向键调整字号，Shift 加速`}
                 aria-valuemin={MIN_FONT_SIZE_PT}
                 aria-valuemax={MAX_FONT_SIZE_PT}
-                aria-valuenow={line.style.fontSizePt ?? label.style.fontSizePt}
-                onKeyDown={(event) => resizeTextWithKeyboard(line, event)}
+                aria-valuenow={renderedFontSize}
+                onKeyDown={(event) => resizeTextWithKeyboard(line, renderedFontSize, event)}
                 onPointerDown={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -379,7 +385,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
                   textResizeRef.current = {
                     clientX: event.clientX,
                     clientY: event.clientY,
-                    fontSizePt: line.style.fontSizePt ?? label.style.fontSizePt,
+                    fontSizePt: renderedFontSize,
                     width: bounds.width,
                     height: bounds.height,
                     lineId: line.id,
@@ -423,7 +429,7 @@ export default function LabelPreview({ label, preset, activeLineId, selectedLine
       </div>
     </div>
     <div className={`layout-status ${layout && !layout.ok ? 'is-error' : ''}`} role="status">
-      <span>{layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeLine?.style.fontSizePt ?? label.style.fontSizePt} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}</span>
+      <span>{layout && !layout.ok ? layout.error : `第 ${activeIndex + 1} 行 · ${activeRenderedFontSize} pt · ${describePlacement(activeLine?.placement ?? label.placement)}`}</span>
       {activeLine && <button
         className="layout-status-action"
         type="button"

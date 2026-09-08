@@ -35,7 +35,11 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-const labelFor = (content: string) => createLabel({ content, quantity: 1, source: 'manual', needsReview: false });
+const labelFor = (content: string) => {
+  const label = createLabel({ content, quantity: 1, source: 'manual', needsReview: false });
+  label.style.fontMode = 'fixed';
+  return label;
+};
 
 function PreviewHarness({ fontSizePt = 26 }: { fontSizePt?: number } = {}) {
   const [label, setLabel] = useState(() => {

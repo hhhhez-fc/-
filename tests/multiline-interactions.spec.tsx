@@ -31,11 +31,12 @@ afterEach(() => {
 
 const stateWithLabel = (content: string) => {
   const label = createLabel({ content, quantity: 1, source: 'manual', needsReview: false });
+  label.style.fontMode = 'fixed';
   return { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
 };
 
 describe('多行文字交互', () => {
-  it('单行文字通过缩放手柄改变字号时同步更新全部字号', () => {
+  it('单行自动字号通过缩放手柄时从实际渲染字号继续调整', () => {
     const state = stateWithLabel('ONLY-LINE');
     state.labels[0].style.fontMode = 'auto';
     render(<App initialState={state} />);
@@ -43,7 +44,8 @@ describe('多行文字交互', () => {
     const resizeHandle = screen.getAllByRole('slider', { name: /调整第 1 行文字大小/ })[0];
     fireEvent.keyDown(resizeHandle, { key: 'ArrowUp' });
 
-    expect((screen.getByRole('spinbutton', { name: '全部字号' }) as HTMLInputElement).value).toBe('27');
+    expect((screen.getByRole('spinbutton', { name: '全部字号' }) as HTMLInputElement).value).toBe('36');
+    expect(resizeHandle.getAttribute('aria-valuenow')).toBe('36');
   });
 
   it('单行文字用鼠标拖动右下缩放手柄时同步实际字号', () => {
@@ -59,8 +61,8 @@ describe('多行文字交互', () => {
     fireEvent.pointerDown(resizeHandle, { pointerId: 1, clientX: 100, clientY: 20 });
     fireEvent.pointerMove(resizeHandle, { pointerId: 1, clientX: 120, clientY: 24 });
 
-    expect((screen.getByRole('spinbutton', { name: '全部字号' }) as HTMLInputElement).value).toBe('31');
-    expect(resizeHandle.getAttribute('aria-valuenow')).toBe('31');
+    expect((screen.getByRole('spinbutton', { name: '全部字号' }) as HTMLInputElement).value).toBe('42');
+    expect(resizeHandle.getAttribute('aria-valuenow')).toBe('42');
   });
 
   it('多行文字缩放单行时不覆盖全部字号和其他行', () => {

@@ -728,6 +728,19 @@ describe('图片识别区域', () => {
 });
 
 describe('逐行预览', () => {
+  it('从空白框输入单行唛头后使用自动放大的渲染字号', () => {
+    render(<App initialState={createInitialDraft()} />);
+
+    const input = screen.getByRole('textbox', { name: '直接输入唛头内容' });
+    fireEvent.change(input, { target: { value: '1548' } });
+    fireEvent.blur(input);
+
+    const line = screen.getByRole('button', { name: /拖动第 1 行：1548/ });
+    expect(line.style.fontSize).toBe('108px');
+    expect(screen.getByRole('group', { name: /拖动内容打印区域/ }).getAttribute('style')).toContain('left: 0px');
+    expect(screen.getByText(/第 1 行 · 81 pt · 正中/)).toBeTruthy();
+  });
+
   it('屏幕预览和打印页使用同一个缩小后字号', () => {
     const label = createLabel({
       content: 'MMMM',
@@ -860,7 +873,7 @@ describe('逐行预览', () => {
       onChange={() => undefined}
     />);
 
-    expect(html).toContain('font-size:14.666666666666666px');
+    expect(html).toContain('font-size:16px');
     expect(html).toContain('文字行发生重叠');
   });
 

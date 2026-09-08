@@ -388,14 +388,23 @@ describe('本地草稿存储', () => {
     expect(loaded?.workspaceLayout.sizes).not.toHaveProperty('history');
   });
 
-  it('读取旧草稿时把隐藏的自动字号迁移为可直接编辑的固定字号', () => {
+  it('重新打开草稿时保留明确保存的自动字号模式', () => {
     const label = createLabel({ content: 'FYF-TTT0103', quantity: 1, source: 'manual', needsReview: false });
     label.style.fontMode = 'auto';
     label.style.fontSizePt = 36;
     const oldDraft = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
     const storage = { getItem: () => JSON.stringify(oldDraft) };
 
-    expect(loadDraft(storage)?.labels[0].style).toMatchObject({ fontMode: 'fixed', fontSizePt: 36 });
+    expect(loadDraft(storage)?.labels[0].style).toMatchObject({ fontMode: 'auto', fontSizePt: 36 });
+  });
+
+  it('缺少字号模式的旧草稿仍回退为固定字号', () => {
+    const label = createLabel({ content: 'LEGACY', quantity: 1, source: 'manual', needsReview: false });
+    const legacyStyle = label.style as Partial<typeof label.style>;
+    delete legacyStyle.fontMode;
+    const oldDraft = { ...createInitialDraft(), labels: [label], activeLabelId: label.id };
+
+    expect(loadDraft({ getItem: () => JSON.stringify(oldDraft) })?.labels[0].style.fontMode).toBe('fixed');
   });
 
   it('浏览器拒绝取得本机存储时仍可恢复和继续编辑', () => {

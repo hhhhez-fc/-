@@ -80,13 +80,13 @@ describe('打印数量校验', () => {
 });
 
 describe('尺寸与样式默认值', () => {
-  it('提供可编辑的大、小唛头预设和可直接调整的固定字号样式', () => {
+  it('提供可编辑的大、小唛头预设和默认自动字号样式', () => {
     expect(defaultSizePresets.map(({ id, widthMm, heightMm }) => ({ id, widthMm, heightMm }))).toEqual([
       { id: 'large', widthMm: 100, heightMm: 60 },
       { id: 'small', widthMm: 70, heightMm: 45 },
     ]);
     expect(defaultStyle).toMatchObject({
-      fontMode: 'fixed',
+      fontMode: 'auto',
       horizontalAlign: 'center',
       verticalAlign: 'middle',
       fontWeight: 700,
@@ -108,7 +108,15 @@ describe('唛头排版', () => {
     expect(getPreviewScale(260, 130)).toBeCloseTo(0.5292, 3);
   });
 
-  it('自动适配保留能容纳的字号，并把长内容缩小到最大可用字号', () => {
+  it('单行自动字号放大到完整铺满打印区域的最大字号', () => {
+    const label = createLabel({ content: '1548', quantity: 1, source: 'manual', needsReview: false });
+    const layout = solveLabelTextLayout(label, defaultSizePresets[1]);
+
+    expect(label.style.fontMode).toBe('auto');
+    expect(layout.ok && layout.lineLayouts[label.textLines[0].id].fontSizePt).toBe(81);
+  });
+
+  it('自动适配把短内容放大并把长内容缩小到最大可用字号', () => {
     const short = createLabel({ content: 'FY', quantity: 1, source: 'manual', needsReview: false });
     short.style.fontMode = 'auto';
     short.style.fontSizePt = 48;
@@ -124,7 +132,7 @@ describe('唛头排版', () => {
     long.style.fontSizePt = 48;
     const longLayout = solveLabelTextLayout(long, defaultSizePresets[1]);
 
-    expect(shortLayout.ok && shortLayout.lineLayouts[short.textLines[0].id].fontSizePt).toBe(48);
+    expect(shortLayout.ok && shortLayout.lineLayouts[short.textLines[0].id].fontSizePt).toBeGreaterThan(48);
     expect(longLayout.ok).toBe(true);
     expect(longLayout.ok && longLayout.lineLayouts[long.textLines[0].id].fontSizePt).toBeLessThan(48);
   });
@@ -250,6 +258,7 @@ describe('唛头排版', () => {
       needsReview: false,
     });
     label.style.fontSizePt = 32;
+    label.style.fontMode = 'fixed';
     const preset = { ...defaultSizePresets[0], widthMm: 130, heightMm: 70, maxFontSize: 56, minFontSize: 8 };
     const centered = solveLabelTextLayout(label, preset);
 

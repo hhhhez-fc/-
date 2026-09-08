@@ -11,14 +11,11 @@ export function resolvePrintArea(
   area: PrintAreaMm | undefined,
   preset: Pick<SizePreset, 'widthMm' | 'heightMm' | 'paddingMm'>,
 ): PrintAreaMm {
-  const padding = Number.isFinite(preset.paddingMm)
-    ? clamp(preset.paddingMm, 0, Math.min(preset.widthMm, preset.heightMm) / 2)
-    : 0;
   const fallback = {
-    leftMm: padding,
-    topMm: padding,
-    widthMm: Math.max(MIN_PRINT_AREA_MM, preset.widthMm - padding * 2),
-    heightMm: Math.max(MIN_PRINT_AREA_MM, preset.heightMm - padding * 2),
+    leftMm: 0,
+    topMm: 0,
+    widthMm: Math.max(MIN_PRINT_AREA_MM, preset.widthMm),
+    heightMm: Math.max(MIN_PRINT_AREA_MM, preset.heightMm),
   };
   const candidate = area && Object.values(area).every(Number.isFinite) ? area : fallback;
   const widthMm = clamp(candidate.widthMm, MIN_PRINT_AREA_MM, preset.widthMm);

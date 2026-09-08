@@ -157,7 +157,8 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
   for (const index of printableLineIndexes) {
     const requested = requestedLineSize(label, index);
     const usesFixedLineSize = usesFixedFontSize || label.textLines[index].style.fontSizePt !== undefined;
-    const candidates = usesFixedLineSize ? [requested] : fontSizeCandidates(requested, preset.minFontSize);
+    const autoFillRequested = printableLineIndexes.length === 1 ? MAX_FONT_SIZE_PT : requested;
+    const candidates = usesFixedLineSize ? [requested] : fontSizeCandidates(autoFillRequested, preset.minFontSize);
     const resolved = candidates.find((candidate) => {
       const fontScale = candidate / requested;
       const rect = scaledLineRect(label, index, candidate, fontScale, width, height);
