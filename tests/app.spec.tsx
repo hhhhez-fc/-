@@ -852,7 +852,7 @@ describe('逐行预览', () => {
     expect(html).toContain('text-line-frame is-active-line');
   });
 
-  it('文字行重叠时保持内容适配字号并显示位置错误', () => {
+  it('文字行重叠时保持内容适配字号且不显示警告', () => {
     const label = createLabel({
       content: Array.from({ length: 9 }, (_, index) => `LONG SHIPPING MARK LINE ${index + 1}`).join('\n'),
       quantity: 1,
@@ -874,7 +874,7 @@ describe('逐行预览', () => {
     />);
 
     expect(html).toContain('font-size:16px');
-    expect(html).toContain('文字行发生重叠');
+    expect(html).not.toContain('文字行发生重叠');
   });
 
   it('提供整体拖动和八方向缩放打印区域的语义控件', () => {

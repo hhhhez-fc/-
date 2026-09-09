@@ -45,17 +45,6 @@ function rangeForLine(label: LabelRecord, lineIndex: number) {
     }));
 }
 
-interface TextRect {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-function rectsOverlap(a: TextRect, b: TextRect): boolean {
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-}
-
 function requestedLineSize(label: LabelRecord, lineIndex: number): number {
   const requested = label.textLines[lineIndex].style.fontSizePt ?? label.style.fontSizePt;
   return clampFontSizePt(requested);
@@ -151,7 +140,6 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
     .map((line, index) => line.text.trim() ? index : -1)
     .filter((index) => index >= 0);
   const lineLayouts: Record<string, ResolvedLineLayout> = {};
-  const rects: ReturnType<typeof scaledLineRect>[] = [];
   let firstOverflowFontSize: number | undefined;
 
   for (const index of printableLineIndexes) {
@@ -172,13 +160,11 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
         fontSizePt: fallbackFontSize,
         fontScale: fallbackFontSize / requested,
       };
-      rects.push(scaledLineRect(label, index, fallbackFontSize, fallbackFontSize / requested, width, height));
       if (!usesFixedLineSize) firstOverflowFontSize ??= fallbackFontSize;
       continue;
     }
     const fontScale = resolved / requested;
     lineLayouts[label.textLines[index].id] = { fontSizePt: resolved, fontScale };
-    rects.push(scaledLineRect(label, index, resolved, fontScale, width, height));
   }
 
   const fontSize = printableLineIndexes.length > 0
@@ -191,11 +177,6 @@ export function solveLabelTextLayout(label: LabelRecord, preset: SizePreset): La
       fontSize: firstOverflowFontSize,
       lineLayouts,
     };
-  }
-  const fitsWithoutOverlap = rects.every((rect, index) =>
-    rects.slice(index + 1).every((other) => !rectsOverlap(rect, other)));
-  if (!fitsWithoutOverlap) {
-    return { ok: false, error: '文字行发生重叠', fontSize, lineLayouts };
   }
   return { ok: true, fontSize, lineLayouts, lines: label.textLines.map((line) => line.text) };
 }

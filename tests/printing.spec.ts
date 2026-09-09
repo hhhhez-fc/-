@@ -48,6 +48,31 @@ describe('print planning', () => {
     expect(plan.totalCopies).toBe(1);
   });
 
+  it('keeps intentionally overlapping text lines printable without adding a blocker', () => {
+    const label = createLabel({
+      content: '564\n547',
+      quantity: 1,
+      source: 'manual',
+      needsReview: false,
+      sizePresetId: 'small',
+    });
+    label.textLines = label.textLines.map((line) => ({
+      ...line,
+      placement: {
+        xPercent: 50,
+        yPercent: 50,
+        horizontalSnap: 'center',
+        verticalSnap: 'middle',
+      },
+    }));
+
+    const plan = createPrintPlan([label], defaultSizePresets);
+
+    expect(plan.blockers).toEqual([]);
+    expect(plan.groups).toHaveLength(1);
+    expect(plan.totalCopies).toBe(1);
+  });
+
   it('blocks labels that reference a missing or invalid size preset', () => {
     const label = createLabel({ content: 'A', quantity: 1, source: 'manual', needsReview: false, sizePresetId: 'missing' });
     expect(createPrintPlan([label], defaultSizePresets).blockers[0].reasons).toEqual(['找不到对应的尺寸预设']);
