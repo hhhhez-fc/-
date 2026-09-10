@@ -1,0 +1,109 @@
+name: Release print helper
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic helper version, for example 0.1.0
+        required: true
+        type: string
+  push:
+    tags:
+      - print-helper-v*
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve and validate release version
+        id: version
+        shell: pwsh
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            if ($env:GITHUB_REF_NAME -notmatch '^print-helper-v(?<version>\d+\.\d+\.\d+)$') { throw 'Invalid print helper tag.' }
+            $Matches.version
+          } else {
+            $env:DISPATCH_VERSION
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Version must use x.y.z.' }
+          $manifest = Get-Content print-helper/version.json -Raw | ConvertFrom-Json
+          if ($manifest.helperVersion -cne $version) { throw "Version does not match print-helper/version.json: $version" }
+          $tag = "print-helper-v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne $tag) { throw 'Tag and version do not match.' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Test print helper
+        run: dotnet test print-helper/LabelPrintHelper.sln --configuration Release
+
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup --version=6.7.1 --yes --no-progress
+
+      - name: Build versioned installer
+        shell: pwsh
+        run: >-
+          ./print-helper/scripts/build-installer.ps1
+          -Version '${{ steps.version.outputs.version }}'
+          -OutputDirectory artifacts
+
+      - name: Verify installer checksum
+        shell: pwsh
+        run: |
+          $expected = ((Get-Content artifacts/LabelPrintHelper-Setup.exe.sha256 -Raw) -split '\s+')[0]
+          $actual = (Get-FileHash artifacts/LabelPrintHelper-Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -cne $expected) { throw 'Installer checksum verification failed.' }
+
+      - name: Publish immutable release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $assets = @('LabelPrintHelper-Setup.exe', 'LabelPrintHelper-Setup.exe.sha256')
+          $releaseExists = $true
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) { $releaseExists = $false }
+
+          if (-not $releaseExists) {
+            gh release create $env:RELEASE_TAG `
+              artifacts/LabelPrintHelper-Setup.exe `
+              artifacts/LabelPrintHelper-Setup.exe.sha256 `
+              --repo $env:GITHUB_REPOSITORY `
+              --target $env:GITHUB_SHA `
+              --title "Label Print Helper ${{ steps.version.outputs.version }}" `
+              --notes "Windows x64 installer for Label Print Helper ${{ steps.version.outputs.version }}."
+            if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed.' }
+            exit 0
+          }
+
+          $existingNames = @(gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" --jq '.assets[].name')
+          foreach ($asset in $assets) {
+            $localPath = Join-Path artifacts $asset
+            if ($existingNames -contains $asset) {
+              $temporary = Join-Path $env:RUNNER_TEMP "existing-$asset"
+              gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern $asset --output $temporary
+              if ($LASTEXITCODE -ne 0) { throw "Unable to verify existing asset: $asset" }
+              $localHash = (Get-FileHash $localPath -Algorithm SHA256).Hash
+              $remoteHash = (Get-FileHash $temporary -Algorithm SHA256).Hash
+              if ($localHash -cne $remoteHash) { throw "Refusing to overwrite different release asset: $asset" }
+            } else {
+              gh release upload $env:RELEASE_TAG $localPath --repo $env:GITHUB_REPOSITORY
+              if ($LASTEXITCODE -ne 0) { throw "Unable to upload release asset: $asset" }
+            }
+          }

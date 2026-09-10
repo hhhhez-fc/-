@@ -1,5 +1,13 @@
 #define MyAppName "Label Print Helper"
-#define MyAppVersion "0.1.0"
+#ifndef MyAppVersion
+  #error MyAppVersion must be supplied by build-installer.ps1
+#endif
+#ifndef MyPublishDir
+  #error MyPublishDir must be supplied by build-installer.ps1
+#endif
+#ifndef MyOutputDir
+  #error MyOutputDir must be supplied by build-installer.ps1
+#endif
 #define MyAppPublisher "Label Print Helper"
 #define MyAppExeName "LabelPrintHelper.exe"
 
@@ -11,7 +19,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\LabelPrintHelper
 DefaultGroupName={#MyAppName}
 PrivilegesRequired=lowest
-OutputDir=..\..\artifacts
+OutputDir={#MyOutputDir}
 OutputBaseFilename=LabelPrintHelper-Setup
 Compression=lzma2
 SolidCompression=yes
@@ -22,7 +30,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 ChangesAssociations=yes
 
 [Files]
-Source: "..\src\LabelPrintHelper\bin\Release\net10.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyPublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
