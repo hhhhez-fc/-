@@ -96,18 +96,22 @@ export function markInstallerDownloadedThisSession(version: string, storage: Sto
 }
 
 function validateManifest(value: unknown): PrintHelperInstallerManifest {
-  if (!isObject(value)
-    || value.schemaVersion !== 1
-    || !SEMANTIC_VERSION.test(readString(value.helperVersion))
+  if (!isObject(value)) {
+    throw new PrintHelperInstallerError('invalid-manifest', '打印助手安装清单内容无效');
+  }
+  const helperVersion = readString(value.helperVersion);
+  const sha256 = readString(value.sha256);
+  const publishedAtUtc = readString(value.publishedAtUtc);
+  if (value.schemaVersion !== 1
+    || !SEMANTIC_VERSION.test(helperVersion)
     || value.protocolVersion !== 1
     || value.platform !== 'windows-x64'
     || value.fileName !== DOWNLOAD_FILE_NAME
-    || !SHA256.test(readString(value.sha256))
-    || !isStrictUtcTimestamp(value.publishedAtUtc)) {
+    || !SHA256.test(sha256)
+    || !isStrictUtcTimestamp(publishedAtUtc)) {
     throw new PrintHelperInstallerError('invalid-manifest', '打印助手安装清单内容无效');
   }
 
-  const helperVersion = value.helperVersion;
   const downloadUrl = parseSafeUrl(value.downloadUrl);
   const releaseNotesUrl = parseSafeUrl(value.releaseNotesUrl);
   const expectedAssetPath = `/hhhhez-fc/-/releases/download/print-helper-v${helperVersion}/${DOWNLOAD_FILE_NAME}`;
@@ -123,9 +127,9 @@ function validateManifest(value: unknown): PrintHelperInstallerManifest {
     platform: 'windows-x64',
     fileName: DOWNLOAD_FILE_NAME,
     downloadUrl: downloadUrl.href,
-    sha256: value.sha256,
+    sha256,
     releaseNotesUrl: releaseNotesUrl.href,
-    publishedAtUtc: value.publishedAtUtc,
+    publishedAtUtc,
   };
 }
 
