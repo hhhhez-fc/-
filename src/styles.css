@@ -512,6 +512,21 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .direct-print-settings, .direct-print-preview { display: grid; gap: .75rem; min-width: 0; }
 .direct-print-settings { padding-right: 1rem; border-right: 1px solid var(--color-line); }
 .direct-print-connection, .direct-print-section, .direct-print-recovery { display: grid; gap: .5rem; padding: .7rem; background: color-mix(in srgb,var(--color-control-surface) 84%,var(--color-canvas)); border: 1px solid var(--color-line); }
+.helper-setup-progress { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .35rem; margin: 0; padding: 0; list-style: none; }
+.helper-setup-progress li { display: grid; grid-template-columns: 1.25rem minmax(0,1fr); gap: .3rem; align-items: center; min-width: 0; color: var(--color-muted); font: 700 .62rem Bahnschrift,"Microsoft YaHei",sans-serif; }
+.helper-setup-progress li span { display: grid; width: 1.2rem; height: 1.2rem; place-items: center; background: var(--color-control-surface); border: 1px solid var(--color-line); border-radius: var(--radius-sm); font: 700 .62rem Bahnschrift,Consolas,monospace; }
+.helper-setup-progress li[data-state="current"] { color: var(--color-ink); }
+.helper-setup-progress li[data-state="current"] span { color: #fff; background: var(--color-signal); border-color: var(--color-signal); }
+.helper-setup-progress li[data-state="complete"] { color: var(--color-success); }
+.helper-setup-progress li[data-state="complete"] span { color: #fff; background: var(--color-success); border-color: var(--color-success); }
+.helper-install-card { display: grid; gap: .5rem; padding: .7rem; background: color-mix(in srgb,var(--color-control-surface) 88%,var(--color-warning)); border: 1px solid var(--color-line); border-left: 3px solid var(--color-warning); }
+.helper-install-card p { margin: 0; font-size: .68rem; line-height: 1.5; }
+.helper-installer-meta { display: grid; gap: .3rem; margin: 0; }
+.helper-installer-meta div { display: grid; grid-template-columns: 4rem minmax(0,1fr); gap: .4rem; align-items: start; }
+.helper-installer-meta dt { color: var(--color-muted); font-size: .64rem; font-weight: 700; }
+.helper-installer-meta dd { min-width: 0; margin: 0; font-size: .66rem; }
+.helper-installer-meta code { display: block; overflow-wrap: anywhere; color: var(--color-ink); font: 600 .61rem/1.45 Consolas,monospace; user-select: all; }
+.helper-installer-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
 .direct-print-section { margin: 0; }
 .direct-print-section legend { padding: 0 .25rem; font-size: .72rem; font-weight: 700; }
 .direct-print-paper { color: var(--color-ink); font: 700 .9rem Bahnschrift,Consolas,monospace; }
@@ -613,6 +628,8 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
   .print-label-preview-row { grid-template-columns: minmax(0,1fr); }
   .direct-print-content { grid-template-columns: minmax(0,1fr); }
   .direct-print-settings { padding-right: 0; border-right: 0; border-bottom: 1px solid var(--color-line); padding-bottom: 1rem; }
+  .helper-setup-progress { grid-template-columns: repeat(2,minmax(0,1fr)); row-gap: .55rem; }
+  .helper-installer-actions { align-items: stretch; }
   .shortcut-list > div { grid-template-columns: minmax(0,1fr); gap: .45rem; }
   .shortcut-list dd { justify-content: flex-start; }
 }

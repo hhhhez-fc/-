@@ -12,6 +12,8 @@ import PrintReviewDialog, {
   type PrintReviewDialogModeProps,
 } from '../src/features/PrintReviewDialog';
 import type { PrintHelperCalibrationState, PrintHelperConnectionState } from '../src/features/usePrintHelper';
+import type { PrintHelperBootstrapState } from '../src/features/usePrintHelperBootstrap';
+import type { PrintHelperInstallerManifest } from '../src/services/printHelperInstaller';
 import styles from '../src/styles.css?raw';
 
 const preset100x75: SizePreset = {
@@ -35,6 +37,18 @@ const verifiedCalibration: PrintHelperCalibrationState = {
   kind: 'verified', printerId: 'xp-420b-usb', profileRevision: '11111111111111111111111111111111',
 };
 
+const installerManifest: PrintHelperInstallerManifest = {
+  schemaVersion: 1,
+  helperVersion: '0.1.0',
+  protocolVersion: 1,
+  platform: 'windows-x64',
+  fileName: 'LabelPrintHelper-Setup.exe',
+  downloadUrl: 'https://github.com/hhhhez-fc/-/releases/download/print-helper-v0.1.0/LabelPrintHelper-Setup.exe',
+  sha256: 'a'.repeat(64),
+  releaseNotesUrl: 'https://github.com/hhhhez-fc/-/releases/tag/print-helper-v0.1.0',
+  publishedAtUtc: '2026-09-10T00:00:00.000Z',
+};
+
 function directProps(overrides: Record<string, unknown> = {}) {
   return {
     mode: 'direct' as const,
@@ -51,6 +65,9 @@ function directProps(overrides: Record<string, unknown> = {}) {
     calibrationState: verifiedCalibration,
     selectedPrinterId: 'xp-420b-usb',
     onLaunchHelper: vi.fn(),
+    helperBootstrapState: { kind: 'idle' } satisfies PrintHelperBootstrapState,
+    onDownloadInstaller: vi.fn(),
+    onRetryHelperBootstrap: vi.fn(),
     onSelectedPrinterIdChange: vi.fn(),
     onRefreshHelper: vi.fn(),
     onPairHelper: vi.fn(),
@@ -72,6 +89,9 @@ describe('网站直接打印对话框', () => {
       selectedPrinterId: string | null;
       onSelectedPrinterIdChange: (printerId: string | null) => void;
       onLaunchHelper: () => void;
+      helperBootstrapState: PrintHelperBootstrapState;
+      onDownloadInstaller: () => void;
+      onRetryHelperBootstrap: () => void;
       onRefreshHelper: () => void;
       onPairHelper: () => void;
       onCalibratePrinter: (printer: (typeof ready.printers)[number]) => void;
@@ -92,6 +112,71 @@ describe('网站直接打印对话框', () => {
     expect(screen.getByText('未检测到打印助手')).toBeTruthy();
     expect(screen.getByRole('button', { name: '启动/打开打印助手' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '刷新连接' })).toBeTruthy();
+  });
+
+  it('把自动启动、安装、配对和校准呈现为稳定的四阶段进度', () => {
+    render(<PrintReviewDialog {...directProps({
+      connectionState: { kind: 'not-installed' },
+      calibrationState: { kind: 'not-selected' },
+      selectedPrinterId: null,
+      helperBootstrapState: { kind: 'launching' },
+    })} />);
+
+    const progress = screen.getByRole('list', { name: '打印助手设置进度' });
+    expect(progress.textContent).toContain('启动助手');
+    expect(progress.textContent).toContain('安装/连接');
+    expect(progress.textContent).toContain('网站配对');
+    expect(progress.textContent).toContain('打印机校准');
+    expect(screen.getByText('正在启动打印助手')).toBeTruthy();
+  });
+
+  it('自动下载后显示可核验安装信息并保留人工恢复操作', async () => {
+    const user = userEvent.setup();
+    const onDownloadInstaller = vi.fn();
+    const onRetryHelperBootstrap = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(<PrintReviewDialog {...directProps({
+      connectionState: { kind: 'not-installed' },
+      calibrationState: { kind: 'not-selected' },
+      selectedPrinterId: null,
+      helperBootstrapState: {
+        kind: 'waiting-for-install', manifest: installerManifest, downloadAttempted: true,
+      },
+      onDownloadInstaller,
+      onRetryHelperBootstrap,
+    })} />);
+
+    expect(screen.getByText('已安排下载安装包')).toBeTruthy();
+    expect(screen.getByText('版本 0.1.0')).toBeTruthy();
+    expect(screen.getByText('LabelPrintHelper-Setup.exe')).toBeTruthy();
+    expect(screen.getByText(installerManifest.sha256)).toBeTruthy();
+    expect(screen.getByText(/仍需打开安装包并完成 Windows 安装/)).toBeTruthy();
+    expect(screen.getByText(/尚未提供代码签名验证/)).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: '下载安装包' }));
+    await user.click(screen.getByRole('button', { name: '复制 SHA-256' }));
+    await user.click(screen.getByRole('button', { name: '已安装，立即检测' }));
+    expect(onDownloadInstaller).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledWith(installerManifest.sha256);
+    expect(onRetryHelperBootstrap).toHaveBeenCalledOnce();
+    expect(await screen.findByText('SHA-256 已复制')).toBeTruthy();
+  });
+
+  it('安装清单失败时说明安全原因并提供重新检测', async () => {
+    const user = userEvent.setup();
+    const onRetryHelperBootstrap = vi.fn();
+    render(<PrintReviewDialog {...directProps({
+      connectionState: { kind: 'not-installed' },
+      calibrationState: { kind: 'not-selected' },
+      selectedPrinterId: null,
+      helperBootstrapState: { kind: 'error', message: '暂时无法获取经过验证的打印助手安装包' },
+      onRetryHelperBootstrap,
+    })} />);
+
+    expect(screen.getByRole('alert').textContent).toContain('暂时无法获取经过验证的打印助手安装包');
+    await user.click(screen.getByRole('button', { name: '重新检测打印助手' }));
+    expect(onRetryHelperBootstrap).toHaveBeenCalledOnce();
   });
 
   it('校准未验证时显示原因并禁止提交，验证后才允许直接打印', () => {

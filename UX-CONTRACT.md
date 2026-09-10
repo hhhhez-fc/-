@@ -20,6 +20,7 @@
 | 打印流程、多行编辑、历史与旋转 | `docs/superpowers/specs/2026-09-04-print-workflow-and-multiline-editing-design.md` | 用户逐节确认规格 | 2026-09-04 |
 | 记录搜索、撤销重做、应用内剪贴板与快捷键 | `docs/superpowers/specs/2026-09-06-workbench-productivity-and-dead-code-design.md` | 用户确认规格 | 2026-09-06 |
 | XP-420B 网站直打、最终位图、助手安全边界与恢复 | `docs/superpowers/specs/2026-09-08-xprinter-direct-printing-design.md` | 用户确认规格 | 2026-09-08 |
+| 打印助手自动唤起、可信安装器下载与恢复 | `docs/superpowers/specs/2026-09-10-print-helper-auto-install-design.md` | 用户确认规格 | 2026-09-10 |
 
 ## Visual contract
 
@@ -51,6 +52,7 @@
 | Record Clipboard | `workspaceClipboard` + `LabelList` + `App` | 本合同 | 复制生成独立新 ID；剪切仅在粘贴时移动；粘贴后可撤销 | `tests/workspace-clipboard.spec.ts` + `tests/app.spec.tsx` |
 | Shortcut Help | `shortcutKeys` + `ShortcutHelpDialog` | 本合同 | Ctrl 或 ⌘；编辑字段保留原生快捷键；F1 帮助、Escape 关闭或取消剪切 | `tests/shortcut-keys.spec.ts` + `tests/app.spec.tsx` |
 | Direct Printer Bridge | `PrintReviewDialog` + `PrintBitmapSurface` / `renderPrintAsset` + `usePrintHelper` / `PrintHelperClient` + `LabelPrintHelper` | 本合同与直打协议 | 网站内直接打印为首选；浏览器打印仅应急；助手连接/配对/版本/打印机/校准/任务恢复均为具名状态 | `tests/direct-print-dialog.spec.tsx` |
+| Print Helper Bootstrap | `usePrintHelperBootstrap` + `printHelperInstaller` + `PrintReviewDialog` | 本合同与自动安装规格 | 用户点击后自动唤起；有限探测；清单强校验；同一版本每会话自动下载一次；安装后继续检测 | `tests/print-helper-bootstrap.spec.tsx` + `tests/print-helper-installer.spec.ts` |
 
 ## Component behavior
 
@@ -72,6 +74,7 @@
 | Preview history | 最近进入打印检查的合法唛头，最多 20 条 | 恢复按钮边线加深 | “再次使用”有可见焦点 | 恢复为新 ID 的可编辑副本 | n/a | n/a | 损坏快照在水合时过滤，保存失败不阻止预览 |
 | Print rotation | 文字默认 0°、纸张保持预设方向和原始毫米宽高 | 旋转按钮边线加深 | 可见焦点 | 每次顺时针 90°，270° 后回到 0° | 图片不显示旋转按钮；整块文字连同行间关系一起旋转，换行、字号和纸张宽高不变 | n/a | 继续旋转回 0° |
 | Direct printer bridge | 网站内对话框显示连接与固定规格；最终预览为 `800 × 600` 位图 | 可用控件按既有边线规则反馈 | 模态焦点约束；关闭后回触发器 | 选择 XP-420B、范围/份数/逐份/方向/偏移/阈值；只有助手返回该打印机已验证校准才可直接打印 | 提交及终态锁定设置；不可用原因可见 | 渲染/上传/提交占固定状态区且按钮尺寸不变 | 未安装时可请求启动助手并重新检测；待配对/版本不兼容/离线/校准读取中/未验证/读取失败/任务失败/部分/未知均保留恢复说明 |
+| Print helper bootstrap | 未开始时不执行外部动作；点击直打后显示四阶段设置进度 | 按既有按钮与边线规则反馈 | 阶段、安装说明和动作均可键盘访问 | 自动唤起一次；助手仍缺失时自动下载一次已校验版本 | 对话框关闭、连接成功或进入配对后取消旧探测 | 状态区保留高度并使用准确动词 | 清单、网络或下载失败显示具名错误；可重新检测或手动再次下载 |
 
 ## Dataset navigation
 
@@ -110,6 +113,7 @@
 | Copy / Cut / Paste | 记录操作栏或 Ctrl / ⌘ + C/X/V | 复制或剪切暂存在应用内；剪切显示“待剪切” | 当前列表、活动记录之后 | 复制、粘贴或移动的精确条数；粘贴/移动作为单个可撤销步骤 | Escape 取消待剪切；目标消失时不执行移动 | 保持操作触发器；剪贴板暂存不写入历史 | 2026-09-06 设计规格 |
 | Shortcut Help | 顶部“快捷键”或 F1 | 对话框打开，背景 inert 且页面滚动锁定 | 快捷键帮助对话框 | 展示跨平台 Ctrl / ⌘ 组合键 | Escape 或关闭按钮关闭 | 对话框聚焦关闭按钮，关闭后回到触发器 | 2026-09-06 设计规格 |
 | Direct print | 单一精确 `100 × 75 mm` 计划直接进入；混合计划从该组按“直接打印标签”进入，再按“直接打印” | 依次显示生成、上传、提交且阻止重复操作 | 同一网站对话框 | “已向打印队列提交 N 张”；不宣称实体标签已输出 | 未提交可修正后重试；部分/未知先核对实体输出与队列，再从下一未确认张创建新任务 | 终态留在对话框；关闭后回打印检查触发按钮 | `docs/superpowers/specs/2026-09-08-xprinter-direct-printing-design.md` |
+| Bootstrap print helper | 用户点击“检查并打印”或某组“直接打印标签” | 自动唤起固定无载荷协议，并在 `0 / 1.5 / 3 / 5s` 有限探测；仍缺失时读取清单并自动下载一次 | 同一网站对话框继续进入配对、选择和校准 | 四阶段进度与准确状态文案；下载卡显示版本、文件名和 SHA-256 | 120s 内每 2s 继续检测；失败可重新检测或手动再次下载；关闭即取消 | 保持对话框内当前动作焦点 | `docs/superpowers/specs/2026-09-10-print-helper-auto-install-design.md` |
 | Pair print helper | 网站检测到无有效配对后创建请求；用户在助手原生确认窗批准，再按“检查配对状态” | 保持待配对说明，不暴露凭据 | 同一网站对话框 | 助手已连接并显示兼容打印机 | 拒绝、过期、已领取或授权失效时重新建立配对；不降低到浏览器打印 | 保持对话框内可操作焦点 | 直打设计规格与协议测试 |
 | Calibrate printer | “校准打印机”只触发固定无载荷 `labelprint://calibrate`，助手新实例或既有实例均聚焦校准控件 | 浏览器只能请求外部协议，不能确认助手已打开或校准已完成；校准命令、边框测试和人工确认分离 | 助手诊断窗；完成后回网站“刷新连接”，网站重新读取 `GET /v1/calibration?printerId=…` | 只有助手返回已验证，且完整边框恰好占一张 `100 × 75 mm` 实体标签时主动作可用 | 任一失败、取消、否认或状态读取失败都保持主动作禁用；重新校准、测试、确认后刷新 | 助手校准控件；网站保留可见未验证说明 | 直打设计规格、`tests/print-helper-client.spec.ts` 与 `CalibrationServiceTests` |
 | Emergency browser print | 直打为“更多操作”→“浏览器打印（应急）”→“仍然打开浏览器打印”；任一非 `100 × 75 mm` legacy 分组也先显示同名应急动作和相同二次确认 | 明示纸张设置不一致可能再次跨标签 | 浏览器系统打印界面；直打确认时先关闭网站对话框 | 仅声明已打开浏览器打印，不作为直打成功证据 | 取消保留草稿；不得自动进入或静默回退 | 关闭系统界面后回网站主页面；再次检查不会保留动作锁 | 直打设计规格 |
@@ -145,9 +149,9 @@
 - Idempotency and duplicate-submit policy: 文件处理忙碌期间禁用重复操作；直打任务使用唯一任务 ID，网站同步锁定重复提交，助手对同一任务幂等返回已有状态。提交请求不自动重试。
 - Auto-save/draft recovery: 每次 reducer 状态变化后防抖写入 localStorage，启动时恢复；不自动覆盖版本不兼容草稿。
 - Offline/read-stale/write behavior: 编辑与草稿核心功能离线运行；OCR 语言资源不可用时保留原图并说明。直打依赖本机助手与 Windows 打印队列，连接失败时保留对话框设置并提供刷新，不静默回退到浏览器打印。
-- Retry/backoff/timeout behavior: 不自动无限重试；文件项提供显式重试。直打的健康检查和状态查询可由用户刷新；非幂等提交遇到超时、网络中断或结果不明时禁止自动重试，先按任务 ID 查询并核对队列/实体输出。
+- Retry/backoff/timeout behavior: 不自动无限重试；文件项提供显式重试。用户触发直打后，助手启动探测只在 `0 / 1.5 / 3 / 5s` 执行；安装器下载后每 2s 检测、最多 120s，并在连接、配对、关闭或卸载组件时取消。非幂等打印提交遇到超时、网络中断或结果不明时禁止自动重试，先按任务 ID 查询并核对队列/实体输出。
 - Version conflict and multi-tab behavior: 不承诺多标签页合并；后打开的标签页读取启动时快照。
-- Stale-request cancellation/invalidation: 图片项提供“取消识别”，离开组件时终止旧 worker，旧结果不得写回新记录。
+- Stale-request cancellation/invalidation: 图片项提供“取消识别”，离开组件时终止旧 worker，旧结果不得写回新记录；打印助手编排在对话框关闭、连接成功、进入配对或组件卸载时终止旧控制器，旧探测不得覆盖新状态。
 - Dialog/form preservation and retry after mutation failure: 本地存储失败不清空内存草稿。直打失败、部分提交或状态不明保留范围、份数、逐份、方向、偏移、阈值、任务 ID 与已确认页码；只有明确未提交才允许原任务重试，其余恢复生成新任务。
 
 ## Direct-print release gate

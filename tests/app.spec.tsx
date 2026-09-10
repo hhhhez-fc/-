@@ -20,6 +20,7 @@ import { createPrintPlan } from '../src/domain/printing';
 import { buildFontSizePreviewLabel } from '../src/domain/fontSizePreview';
 import { PrintHelperError, type PrintJobStatus } from '../src/services/printHelperClient';
 import type { PrintHelperCalibrationState, PrintHelperConnectionState } from '../src/features/usePrintHelper';
+import type { PrintHelperBootstrapState } from '../src/features/usePrintHelperBootstrap';
 
 const directPrintHarness = vi.hoisted(() => ({
   connection: { kind: 'ready', printers: [{
@@ -39,8 +40,18 @@ const directPrintHarness = vi.hoisted(() => ({
   renderAsset: vi.fn(),
 }));
 
+const helperBootstrapHarness = vi.hoisted(() => ({
+  state: { kind: 'idle' } as PrintHelperBootstrapState,
+  start: vi.fn(),
+  retryConnection: vi.fn(async () => undefined),
+  downloadInstaller: vi.fn(async () => undefined),
+}));
+
 vi.mock('../src/features/usePrintHelper', () => ({
   usePrintHelper: () => directPrintHarness,
+}));
+vi.mock('../src/features/usePrintHelperBootstrap', () => ({
+  usePrintHelperBootstrap: () => helperBootstrapHarness,
 }));
 vi.mock('../src/services/printBitmapRenderer', () => ({
   renderPrintAsset: directPrintHarness.renderAsset,
@@ -101,6 +112,10 @@ beforeEach(() => {
     assetId: `asset-${page.label.id}`, labelId: page.label.id, widthDots: 800, heightDots: 600,
     rotation, pngBase64: DIRECT_PNG, sha256: 'b'.repeat(64),
   }));
+  helperBootstrapHarness.state = { kind: 'idle' };
+  helperBootstrapHarness.start.mockReset();
+  helperBootstrapHarness.retryConnection.mockReset().mockResolvedValue(undefined);
+  helperBootstrapHarness.downloadInstaller.mockReset().mockResolvedValue(undefined);
 });
 
 function storedDraft(): DraftState {
@@ -580,6 +595,19 @@ describe('使用过的唛头', () => {
 });
 
 describe('打印检查', () => {
+  it('点击检查并打印会启动打印助手自动编排', async () => {
+    const user = userEvent.setup();
+    const { state } = directState('AUTO-BOOTSTRAP');
+    directPrintHarness.connection = { kind: 'not-installed' };
+    directPrintHarness.selectedPrinterId = null;
+    render(<App initialState={state} />);
+
+    await user.click(screen.getByRole('button', { name: '检查并打印' }));
+
+    expect(helperBootstrapHarness.start).toHaveBeenCalledOnce();
+    expect(screen.getByRole('dialog', { name: '直接打印标签' })).toBeTruthy();
+  });
+
   it('助手未安装且没有未决任务时刷新连接仍调用一次助手探测', async () => {
     const user = userEvent.setup();
     const { state } = directState('REFRESH-NOT-INSTALLED');

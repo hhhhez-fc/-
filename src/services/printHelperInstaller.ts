@@ -30,6 +30,7 @@ const DOWNLOAD_FILE_NAME = 'LabelPrintHelper-Setup.exe';
 const DOWNLOAD_SESSION_PREFIX = 'label-printing-local:helper-installer-download:v1:';
 const SEMANTIC_VERSION = /^\d+\.\d+\.\d+$/;
 const SHA256 = /^[a-f0-9]{64}$/;
+const UNPUBLISHED_SHA256 = '0'.repeat(64);
 
 export async function loadPrintHelperInstallerManifest(
   options: LoadManifestOptions = {},
@@ -108,6 +109,7 @@ function validateManifest(value: unknown): PrintHelperInstallerManifest {
     || value.platform !== 'windows-x64'
     || value.fileName !== DOWNLOAD_FILE_NAME
     || !SHA256.test(sha256)
+    || sha256 === UNPUBLISHED_SHA256
     || !isStrictUtcTimestamp(publishedAtUtc)) {
     throw new PrintHelperInstallerError('invalid-manifest', '打印助手安装清单内容无效');
   }

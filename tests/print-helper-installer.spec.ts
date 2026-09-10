@@ -54,6 +54,7 @@ describe('print helper installer manifest', () => {
     ['wrong release version', { downloadUrl: 'https://github.com/hhhhez-fc/-/releases/download/print-helper-v0.2.0/LabelPrintHelper-Setup.exe' }],
     ['query-bearing URL', { downloadUrl: `${validManifest.downloadUrl}?source=labels` }],
     ['invalid checksum', { sha256: 'ABC123' }],
+    ['unpublished placeholder checksum', { sha256: '0'.repeat(64) }],
     ['unsupported protocol', { protocolVersion: 2 }],
     ['unsupported platform', { platform: 'windows-arm64' }],
     ['invalid publication date', { publishedAtUtc: '2026-02-31T00:00:00.000Z' }],

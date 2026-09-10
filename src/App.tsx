@@ -51,6 +51,7 @@ import { renderPrintAsset } from './services/printBitmapRenderer';
 import { PrintHelperError, type PrintJobStatus } from './services/printHelperClient';
 import { usePrintHelper } from './features/usePrintHelper';
 import { launchPrintHelper } from './services/printHelperLaunch';
+import { usePrintHelperBootstrap } from './features/usePrintHelperBootstrap';
 
 interface ActiveDirectPrintTask {
   jobId: string;
@@ -138,6 +139,11 @@ export default function App({ initialState }: AppProps) {
   const directPrintEligible = presentedPrintDialogPlan.groups.length === 1
     && presentedPrintDialogPlan.groups[0].widthMm === 100
     && presentedPrintDialogPlan.groups[0].heightMm === 75;
+  const printHelperBootstrap = usePrintHelperBootstrap({
+    open: printDialogOpen && directPrintEligible,
+    connectionState: printHelper.connection,
+    refresh: printHelper.refresh,
+  });
   const visibleLabels = useMemo(
     () => filterLabelsByQuery(state.labels, searchQuery),
     [searchQuery, state.labels],
@@ -331,6 +337,7 @@ export default function App({ initialState }: AppProps) {
     }
   };
   const openPrintDialog = (labelId: string | null) => {
+    printHelperBootstrap.start();
     if (activeDirectPrintTaskRef.current
       && (directPrintState.kind === 'partial' || directPrintState.kind === 'unknown')) {
       setPrintDialogOpen(true);
@@ -522,6 +529,9 @@ export default function App({ initialState }: AppProps) {
     selectedPrinterId: printHelper.selectedPrinterId,
     onSelectedPrinterIdChange: printHelper.setSelectedPrinterId,
     onLaunchHelper: () => launchPrintHelper('start'),
+    helperBootstrapState: printHelperBootstrap.state,
+    onDownloadInstaller: () => { void printHelperBootstrap.downloadInstaller(); },
+    onRetryHelperBootstrap: () => { void printHelperBootstrap.retryConnection(); },
     onRefreshHelper: () => { void refreshHelperAndOriginalJob(); },
     onPairHelper: () => { void printHelper.refreshPairingStatus(); },
     onCalibratePrinter: () => {

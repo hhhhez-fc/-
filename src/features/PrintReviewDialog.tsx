@@ -9,6 +9,7 @@ import {
 import type { PrintRotation } from '../domain/printRotation';
 import type { PrinterSummary } from '../services/printHelperClient';
 import type { PrintHelperCalibrationState, PrintHelperConnectionState } from './usePrintHelper';
+import type { PrintHelperBootstrapState } from './usePrintHelperBootstrap';
 import PrintBitmapPreview from './PrintBitmapPreview';
 import PrintLabelThumbnail from './PrintLabelThumbnail';
 
@@ -51,6 +52,9 @@ export type PrintReviewDialogModeProps =
     selectedPrinterId: string | null;
     onSelectedPrinterIdChange: (printerId: string | null) => void;
     onLaunchHelper: () => void;
+    helperBootstrapState: PrintHelperBootstrapState;
+    onDownloadInstaller: () => void;
+    onRetryHelperBootstrap: () => void;
     onRefreshHelper: () => void;
     onPairHelper: () => void;
     onCalibratePrinter: (printer: PrinterSummary) => void;
@@ -101,6 +105,9 @@ function DirectPrintDialog({
   selectedPrinterId,
   onSelectedPrinterIdChange,
   onLaunchHelper,
+  helperBootstrapState,
+  onDownloadInstaller,
+  onRetryHelperBootstrap,
   onRefreshHelper,
   onPairHelper,
   onCalibratePrinter,
@@ -126,6 +133,7 @@ function DirectPrintDialog({
   const [moreActions, setMoreActions] = useState(false);
   const [emergencyConfirm, setEmergencyConfirm] = useState(false);
   const [actionPending, setActionPending] = useState(false);
+  const [installerCopyStatus, setInstallerCopyStatus] = useState('');
   const actionPendingRef = useRef(false);
   const previousLifecycleKind = useRef(directPrintState.kind);
 
@@ -271,6 +279,16 @@ function DirectPrintDialog({
       threshold,
     }));
   };
+  const installerManifest = helperBootstrapState.kind === 'waiting-for-install'
+    || helperBootstrapState.kind === 'timed-out'
+    ? helperBootstrapState.manifest
+    : null;
+  const setupStage = resolveHelperSetupStage(connectionState, calibrationState, helperBootstrapState);
+  const copyInstallerHash = async () => {
+    if (!installerManifest) return;
+    const copied = await copyPaperSizeToClipboard(installerManifest.sha256);
+    setInstallerCopyStatus(copied ? 'SHA-256 已复制' : '无法访问剪贴板，请手动选择校验值');
+  };
 
   return <div className="dialog-backdrop" onMouseDown={(event) => {
     if (event.target === event.currentTarget) closeWhenAllowed();
@@ -286,6 +304,46 @@ function DirectPrintDialog({
       <p className="direct-print-live" role="status" aria-live="polite">{helperMessage}{lifecycleMessage ? `；${lifecycleMessage}` : ''}</p>
       <div className="direct-print-content">
         <section className="direct-print-settings" aria-label="直接打印设置">
+          <ol className="helper-setup-progress" aria-label="打印助手设置进度">
+            {['启动助手', '安装/连接', '网站配对', '打印机校准'].map((label, index) => {
+              const stepState = setupStage > index ? 'complete' : setupStage === index ? 'current' : 'pending';
+              return <li key={label} data-state={stepState} aria-current={stepState === 'current' ? 'step' : undefined}>
+                <span aria-hidden="true">{setupStage > index ? '✓' : index + 1}</span>{label}
+              </li>;
+            })}
+          </ol>
+          {helperBootstrapState.kind === 'launching' ? <div className="helper-install-card" role="status">
+            <strong>正在启动打印助手</strong>
+            <p>网站正在检查本机助手；如果尚未安装，将自动安排下载安装包。</p>
+          </div> : null}
+          {helperBootstrapState.kind === 'loading-installer' ? <div className="helper-install-card" role="status">
+            <strong>正在获取经过验证的安装包</strong>
+            <p>正在核对版本、下载地址和 SHA-256。</p>
+          </div> : null}
+          {installerManifest ? <div className="helper-install-card" aria-label="打印助手安装">
+            <strong>{helperBootstrapState.kind === 'timed-out'
+              ? '等待安装超时'
+              : helperBootstrapState.kind === 'waiting-for-install' && helperBootstrapState.downloadAttempted
+                ? '已安排下载安装包'
+                : '本次会话已安排过下载'}</strong>
+            <dl className="helper-installer-meta">
+              <div><dt>版本</dt><dd>版本 {installerManifest.helperVersion}</dd></div>
+              <div><dt>文件</dt><dd>{installerManifest.fileName}</dd></div>
+              <div><dt>SHA-256</dt><dd><code>{installerManifest.sha256}</code></dd></div>
+            </dl>
+            <p>仍需打开安装包并完成 Windows 安装。安装结束后本页面会继续检测。</p>
+            <p className="direct-print-error">当前安装包尚未提供代码签名验证；若 Windows 无法验证来源，请停止安装。</p>
+            <div className="helper-installer-actions">
+              <button className="button button-quiet" type="button" disabled={controlsLocked} onClick={onDownloadInstaller}>下载安装包</button>
+              <button className="button button-quiet" type="button" disabled={controlsLocked} onClick={() => { void copyInstallerHash(); }}>复制 SHA-256</button>
+              <button className="button button-quiet" type="button" disabled={dialogBusy} onClick={onRetryHelperBootstrap}>已安装，立即检测</button>
+            </div>
+            <p className="direct-print-hint" role="status" aria-live="polite">{installerCopyStatus}</p>
+          </div> : null}
+          {helperBootstrapState.kind === 'error' ? <div className="helper-install-card">
+            <p className="direct-print-error" role="alert">{helperBootstrapState.message}</p>
+            <button className="button button-quiet" type="button" disabled={dialogBusy} onClick={onRetryHelperBootstrap}>重新检测打印助手</button>
+          </div> : null}
           <div className="direct-print-connection">
             {connectionState.kind === 'ready' ? <label className="field">
               <span>打印机</span>
@@ -401,6 +459,21 @@ function describeHelperConnection(state: PrintHelperConnectionState): string {
     case 'ready': return '打印助手已连接';
     case 'error': return `打印助手连接错误：${state.message}`;
   }
+}
+
+function resolveHelperSetupStage(
+  connectionState: PrintHelperConnectionState,
+  calibrationState: PrintHelperCalibrationState,
+  bootstrapState: PrintHelperBootstrapState,
+): number {
+  if (connectionState.kind === 'ready') return calibrationState.kind === 'verified' ? 4 : 3;
+  if (connectionState.kind === 'pairing-required') return 2;
+  if (connectionState.kind === 'version-mismatch'
+    || bootstrapState.kind === 'loading-installer'
+    || bootstrapState.kind === 'waiting-for-install'
+    || bootstrapState.kind === 'timed-out'
+    || bootstrapState.kind === 'error') return 1;
+  return 0;
 }
 
 function describeDirectPrintState(state: DirectPrintLifecycleState): string {
