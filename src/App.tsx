@@ -17,10 +17,14 @@ import SizeStylePanel from './features/SizeStylePanel';
 import ExcelImporter from './features/ExcelImporter';
 import ImageImporter from './features/ImageImporter';
 import ConfirmDialog from './features/ConfirmDialog';
-import PrintReviewDialog from './features/PrintReviewDialog';
+import PrintReviewDialog, {
+  type DirectPrintDialogSubmission,
+  type DirectPrintLifecycleState,
+  type PrintReviewDialogModeProps,
+} from './features/PrintReviewDialog';
 import ShortcutHelpDialog from './features/ShortcutHelpDialog';
 import PrintPages from './features/PrintPages';
-import { createPrintPlan, type PrintGroup } from './domain/printing';
+import { createPrintPlan, type PrintGroup, type PrintPlan } from './domain/printing';
 import { validateLabelForPrint } from './domain/layout';
 import { validateSizePreset } from './domain/labels';
 import {
@@ -42,6 +46,18 @@ import {
   type WorkspaceClipboard,
 } from './domain/workspaceClipboard';
 import { isTextEditingTarget, resolveWorkspaceShortcut } from './domain/shortcutKeys';
+import { createPrintJobManifest } from './domain/directPrinting';
+import { renderPrintAsset } from './services/printBitmapRenderer';
+import { PrintHelperError, type PrintJobStatus } from './services/printHelperClient';
+import { usePrintHelper } from './features/usePrintHelper';
+import { launchPrintHelper } from './services/printHelperLaunch';
+
+interface ActiveDirectPrintTask {
+  jobId: string;
+  submission: DirectPrintDialogSubmission;
+  physicalPages: PrintGroup['pages'];
+  submittedOrdinals: number[];
+}
 
 interface AppProps {
   initialState?: DraftState;
@@ -64,7 +80,9 @@ export default function App({ initialState }: AppProps) {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printPreviewLabelId, setPrintPreviewLabelId] = useState<string | null>(null);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
-  const [activePrintJob, setActivePrintJob] = useState<null | { group: PrintGroup; layout: PrintLayout }>(null);
+  const [emergencyBrowserPrintJob, setEmergencyBrowserPrintJob] = useState<null | { group: PrintGroup; layout: PrintLayout }>(null);
+  const [directPrintState, setDirectPrintState] = useState<DirectPrintLifecycleState>({ kind: 'idle' });
+  const [retainedPrintDialogPlan, setRetainedPrintDialogPlan] = useState<PrintPlan | null>(null);
   const [printRotations, setPrintRotations] = useState<Record<string, PrintRotation>>({});
   const [printLayouts, setPrintLayouts] = useState<Record<string, PrintLayout>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
@@ -76,6 +94,12 @@ export default function App({ initialState }: AppProps) {
   const saveFailureRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingSearchFocusRef = useRef(false);
+  const activeDirectPrintTaskRef = useRef<ActiveDirectPrintTask | null>(null);
+  const printHelper = usePrintHelper();
+  const mountedRef = useRef(true);
+  const recoveryTaskRef = useRef<ActiveDirectPrintTask | null>(null);
+  const cancelSubmissionRef = useRef(printHelper.cancelSubmission);
+  cancelSubmissionRef.current = printHelper.cancelSubmission;
   const warnBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
     event.preventDefault();
     event.returnValue = '';
@@ -110,6 +134,10 @@ export default function App({ initialState }: AppProps) {
         state.sizePresets,
       )
   ), [printPlan, printPreviewLabelId, state.labels, state.sizePresets]);
+  const presentedPrintDialogPlan = retainedPrintDialogPlan ?? printDialogPlan;
+  const directPrintEligible = presentedPrintDialogPlan.groups.length === 1
+    && presentedPrintDialogPlan.groups[0].widthMm === 100
+    && presentedPrintDialogPlan.groups[0].heightMm === 75;
   const visibleLabels = useMemo(
     () => filterLabelsByQuery(state.labels, searchQuery),
     [searchQuery, state.labels],
@@ -166,8 +194,18 @@ export default function App({ initialState }: AppProps) {
   }, [warnBeforeUnload]);
 
   useEffect(() => {
-    if (!activePrintJob || typeof window === 'undefined') return;
-    const handleAfterPrint = () => setActivePrintJob(null);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activeDirectPrintTaskRef.current = null;
+      recoveryTaskRef.current = null;
+      cancelSubmissionRef.current();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!emergencyBrowserPrintJob || typeof window === 'undefined') return;
+    const handleAfterPrint = () => setEmergencyBrowserPrintJob(null);
     window.addEventListener('afterprint', handleAfterPrint, { once: true });
     const firstFrame = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => window.print());
@@ -176,7 +214,16 @@ export default function App({ initialState }: AppProps) {
       window.cancelAnimationFrame(firstFrame);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [activePrintJob]);
+  }, [emergencyBrowserPrintJob]);
+
+  useEffect(() => {
+    if (printHelper.connection.kind !== 'ready') return;
+    const available = printHelper.connection.printers.filter((printer) => printer.isCompatible && printer.isAvailable);
+    if (available.some((printer) => printer.id === printHelper.selectedPrinterId)) return;
+    const preferred = available.find((printer) => /XP[- ]?420B/i.test(printer.displayName))
+      ?? available.find((printer) => printer.isDefault) ?? available[0];
+    printHelper.setSelectedPrinterId(preferred?.id ?? null);
+  }, [printHelper.connection, printHelper.selectedPrinterId, printHelper.setSelectedPrinterId]);
 
   const addManualLabel = () => {
     const sizeType = defaultSizeTypeForBusiness(state.business);
@@ -205,10 +252,16 @@ export default function App({ initialState }: AppProps) {
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
   const closePrintDialog = useCallback(() => {
     setPrintDialogOpen(false);
+    if (activeDirectPrintTaskRef.current
+      && (directPrintState.kind === 'partial' || directPrintState.kind === 'unknown')) return;
     setPrintPreviewLabelId(null);
+    setRetainedPrintDialogPlan(null);
     setPrintRotations({});
     setPrintLayouts({});
-  }, []);
+    activeDirectPrintTaskRef.current = null;
+    recoveryTaskRef.current = null;
+    setDirectPrintState({ kind: 'idle' });
+  }, [directPrintState.kind]);
   const closeShortcutHelp = useCallback(() => setShortcutHelpOpen(false), []);
   const rotatePrintedLabel = useCallback((id: string) => {
     setPrintRotations((current) => ({
@@ -277,12 +330,213 @@ export default function App({ initialState }: AppProps) {
       );
     }
   };
+  const openPrintDialog = (labelId: string | null) => {
+    if (activeDirectPrintTaskRef.current
+      && (directPrintState.kind === 'partial' || directPrintState.kind === 'unknown')) {
+      setPrintDialogOpen(true);
+      return;
+    }
+    activeDirectPrintTaskRef.current = null;
+    recoveryTaskRef.current = null;
+    setDirectPrintState({ kind: 'idle' });
+    setPrintPreviewLabelId(labelId);
+    setRetainedPrintDialogPlan(labelId === null
+      ? printPlan
+      : createPrintPlan(state.labels.filter((label) => label.id === labelId), state.sizePresets));
+    setPrintDialogOpen(true);
+  };
   const openActivePrintPreview = () => {
     if (!activeLabel || activeReviewErrors.length > 0) return;
     recordPrintableLabels([activeLabel.id]);
-    setPrintPreviewLabelId(activeLabel.id);
-    setPrintDialogOpen(true);
+    openPrintDialog(activeLabel.id);
   };
+
+  const rememberAcceptedDirectPrint = () => {
+    applyDraft(
+      { type: 'remember-printed-size', widthMm: 100, heightMm: 75 },
+      '记录上次打印尺寸',
+      false,
+    );
+  };
+
+  const applyHelperJobStatus = (task: ActiveDirectPrintTask, helperStatus: PrintJobStatus) => {
+    if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+    const submittedOrdinals = helperStatus.pages
+      .filter((page) => page.status === 'submitted')
+      .map((page) => page.ordinal)
+      .sort((left, right) => left - right);
+    task.submittedOrdinals = [...submittedOrdinals];
+    const nextOrdinal = Array.from({ length: task.physicalPages.length }, (_, index) => index + 1)
+      .find((ordinal) => !submittedOrdinals.includes(ordinal)) ?? task.physicalPages.length + 1;
+    if (helperStatus.status === 'submitted') {
+      setDirectPrintState({ kind: 'submitted', message: `已向打印队列提交 ${task.physicalPages.length} 张` });
+      setStatus(`已向打印队列提交 ${task.physicalPages.length} 张`);
+    } else if (helperStatus.status === 'partial') {
+      setDirectPrintState({ kind: 'partial', message: '部分提交', submittedOrdinals, nextOrdinal });
+      setStatus(`部分提交：已确认 ${submittedOrdinals.length} / ${task.physicalPages.length} 张`);
+    } else if (helperStatus.status === 'failed') {
+      activeDirectPrintTaskRef.current = null;
+      setDirectPrintState({ kind: 'error', phase: 'submitting', message: '打印助手未提交任务，请检查打印机后重试' });
+      setStatus('打印任务未提交');
+    } else {
+      setDirectPrintState({ kind: 'unknown', message: '状态不明', submittedOrdinals, nextOrdinal });
+      setStatus('状态不明：请核对打印机实体输出和打印队列');
+    }
+  };
+
+  const executeDirectPrintTask = async (task: ActiveDirectPrintTask, sourcePages: PrintGroup['pages']) => {
+    let phase: 'rendering' | 'uploading' | 'submitting' = 'rendering';
+    try {
+      const renderedAssets = [];
+      for (let index = 0; index < sourcePages.length; index += 1) {
+        if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+        const message = `正在生成 ${index + 1} / ${sourcePages.length}`;
+        setDirectPrintState({ kind: 'rendering', message });
+        setStatus(message);
+        const page = sourcePages[index];
+        const renderedAsset = await renderPrintAsset({
+          page,
+          layout: task.submission.layout,
+          rotation: page.label.contentType === 'text' ? printRotations[page.label.id] ?? 0 : 0,
+          horizontalOffsetMm: task.submission.horizontalOffsetMm,
+          verticalOffsetMm: task.submission.verticalOffsetMm,
+          threshold: task.submission.threshold,
+        });
+        if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+        renderedAssets.push(renderedAsset);
+      }
+      const manifest = createPrintJobManifest({
+        jobId: task.jobId,
+        createdAtUtc: new Date().toISOString(),
+        websiteVersion: '0.0.0',
+        printerId: task.submission.printerId,
+        printerName: task.submission.printerName,
+        printerProfileVersion: 'xp420b-100x75-v1',
+        group: task.submission.group,
+        layout: task.submission.layout,
+        range: task.submission.range,
+        copies: task.submission.copies,
+        collate: task.submission.collate,
+        horizontalOffsetMm: task.submission.horizontalOffsetMm,
+        verticalOffsetMm: task.submission.verticalOffsetMm,
+        threshold: task.submission.threshold,
+        expectedLabels: task.physicalPages.length,
+        assets: renderedAssets,
+      });
+      if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+      const result = await printHelper.submitJob(manifest, manifest.assets, (progress) => {
+        if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+        if (progress.stage === 'creating') {
+          phase = 'uploading';
+          const message = `正在上传 0 / ${progress.total}`;
+          setDirectPrintState({ kind: 'uploading', message });
+          setStatus(message);
+        } else if (progress.stage === 'uploading') {
+          phase = 'uploading';
+          const message = `正在上传 ${progress.completed} / ${progress.total}`;
+          setDirectPrintState({ kind: 'uploading', message });
+          setStatus(message);
+        } else if (progress.stage === 'committing') {
+          phase = 'submitting';
+          const message = `正在提交 ${task.physicalPages.length} 张`;
+          setDirectPrintState({ kind: 'submitting', message });
+          setStatus(message);
+        }
+      });
+      if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+      rememberAcceptedDirectPrint();
+      applyHelperJobStatus(task, result);
+    } catch (error) {
+      if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+      const message = error instanceof Error ? error.message : '打印任务失败';
+      if (error instanceof PrintHelperError && error.code === 'uncertain') {
+        setDirectPrintState({ kind: 'unknown', message: '提交结果未知', submittedOrdinals: [], nextOrdinal: 1 });
+        setStatus('状态不明：请核对打印机实体输出和打印队列');
+        return;
+      }
+      activeDirectPrintTaskRef.current = null;
+      setDirectPrintState({ kind: 'error', phase, message });
+      setStatus(phase === 'rendering' ? `生成失败：${message}` : `打印失败：${message}`);
+    }
+  };
+
+  const startDirectPrint = (submission: DirectPrintDialogSubmission, sourcePages?: PrintGroup['pages']) => {
+    if (activeDirectPrintTaskRef.current) return;
+    const selectedPages = sourcePages ?? submission.group.pages.slice(submission.range.from - 1, submission.range.to);
+    const physicalPages = sourcePages ? selectedPages : submission.collate
+      ? Array.from({ length: submission.copies }, () => selectedPages).flat()
+      : selectedPages.flatMap((page) => Array.from({ length: submission.copies }, () => page));
+    const normalizedSubmission = sourcePages ? {
+      ...submission,
+      group: { ...submission.group, pages: selectedPages },
+      range: { from: 1, to: selectedPages.length },
+      copies: 1,
+      collate: true,
+    } : submission;
+    const task = { jobId: crypto.randomUUID(), submission: normalizedSubmission, physicalPages, submittedOrdinals: [] };
+    activeDirectPrintTaskRef.current = task;
+    setDirectPrintState({ kind: 'rendering', message: `正在生成 1 / ${selectedPages.length}` });
+    setStatus(`正在生成 1 / ${selectedPages.length}`);
+    void executeDirectPrintTask(task, selectedPages);
+  };
+
+  const createRemainingDirectPrintTask = (nextOrdinal: number) => {
+    const previous = activeDirectPrintTaskRef.current;
+    if (!previous || nextOrdinal < 1 || nextOrdinal > previous.physicalPages.length) return;
+    const submittedOrdinals = new Set(previous.submittedOrdinals);
+    const remainingPages = previous.physicalPages.filter((_page, index) => !submittedOrdinals.has(index + 1));
+    if (remainingPages.length === 0) return;
+    recoveryTaskRef.current = null;
+    activeDirectPrintTaskRef.current = null;
+    startDirectPrint(previous.submission, remainingPages);
+  };
+
+  const refreshHelperAndOriginalJob = async () => {
+    const task = activeDirectPrintTaskRef.current;
+    const needsOriginalJobRecovery = Boolean(task)
+      && (directPrintState.kind === 'partial' || directPrintState.kind === 'unknown');
+    if (!needsOriginalJobRecovery) {
+      await printHelper.refresh();
+      return;
+    }
+    if (!task || recoveryTaskRef.current === task) return;
+    recoveryTaskRef.current = task;
+    try {
+      await printHelper.refresh();
+      if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+      const helperStatus = await printHelper.jobStatus(task.jobId);
+      if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+      applyHelperJobStatus(task, helperStatus);
+    } catch {
+      if (!mountedRef.current || activeDirectPrintTaskRef.current !== task) return;
+      setStatus('仍无法确认原打印任务状态，请先核对打印机和队列');
+    } finally {
+      if (recoveryTaskRef.current === task) recoveryTaskRef.current = null;
+    }
+  };
+
+  const printReviewDialogModeProps: PrintReviewDialogModeProps = directPrintEligible ? {
+    mode: 'direct',
+    connectionState: printHelper.connection,
+    calibrationState: printHelper.calibrationState,
+    selectedPrinterId: printHelper.selectedPrinterId,
+    onSelectedPrinterIdChange: printHelper.setSelectedPrinterId,
+    onLaunchHelper: () => launchPrintHelper('start'),
+    onRefreshHelper: () => { void refreshHelperAndOriginalJob(); },
+    onPairHelper: () => { void printHelper.refreshPairingStatus(); },
+    onCalibratePrinter: () => {
+      launchPrintHelper('calibrate');
+      setStatus('已请求打开打印助手校准页；浏览器无法确认助手是否已完成校准，完成边框确认后请刷新连接');
+    },
+    directPrintState,
+    onDirectPrint: startDirectPrint,
+    onCreateRemainingTask: createRemainingDirectPrintTask,
+    onEmergencyBrowserPrint: (group: PrintGroup, layout: PrintLayout) => {
+      closePrintDialog();
+      setEmergencyBrowserPrintJob({ group, layout });
+      setStatus('正在打开浏览器应急打印；系统打印份数请保持 1');
+    },
+  } : { mode: 'legacy' };
   const undoDraft = () => {
     const description = history.past.at(-1)?.description;
     if (!description) return;
@@ -681,8 +935,7 @@ export default function App({ initialState }: AppProps) {
           >恢复默认布局</button>
           <button className="button button-print" type="button" disabled={state.labels.length === 0} onClick={() => {
             recordPrintableLabels();
-            setPrintPreviewLabelId(null);
-            setPrintDialogOpen(true);
+            openPrintDialog(null);
           }}>
             检查并打印
           </button>
@@ -739,8 +992,9 @@ export default function App({ initialState }: AppProps) {
       }}
     />
     <PrintReviewDialog
+      {...printReviewDialogModeProps}
       open={printDialogOpen}
-      plan={printDialogPlan}
+      plan={presentedPrintDialogPlan}
       rotations={printRotations}
       layouts={printLayouts}
       onRotateLabel={rotatePrintedLabel}
@@ -754,20 +1008,28 @@ export default function App({ initialState }: AppProps) {
         closePrintDialog();
       }}
       onPrintGroup={(group, layout) => {
+        if (group.widthMm === 100 && group.heightMm === 75) {
+          setRetainedPrintDialogPlan({
+            groups: [group],
+            blockers: [],
+            totalCopies: group.pages.length,
+          });
+          return;
+        }
         const pageGeometry = resolvePrintPageGeometry(group.widthMm, group.heightMm, layout);
         applyDraft(
           { type: 'remember-printed-size', widthMm: pageGeometry.widthMm, heightMm: pageGeometry.heightMm },
           '记录上次打印尺寸',
           false,
         );
-        setActivePrintJob({ group, layout });
+        setEmergencyBrowserPrintJob({ group, layout });
         setStatus(`正在打开 ${pageGeometry.sizeLabel} 的打印设置；系统打印份数请保持 1`);
       }}
     />
     <ShortcutHelpDialog open={shortcutHelpOpen} onClose={closeShortcutHelp} />
     <PrintPages
-      group={activePrintJob?.group ?? null}
-      layout={activePrintJob?.layout}
+      group={emergencyBrowserPrintJob?.group ?? null}
+      layout={emergencyBrowserPrintJob?.layout}
       rotations={printRotations}
     />
     </>

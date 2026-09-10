@@ -10,6 +10,8 @@ interface PrintTextLayerProps {
   lineClassName: string;
   rotation: PrintRotation;
   previewScale?: number;
+  /** Printer dots per millimeter; omitted for the existing browser/thumbnail paths. */
+  physicalDotsPerMm?: number;
 }
 
 export default function PrintTextLayer({
@@ -18,7 +20,9 @@ export default function PrintTextLayer({
   lineClassName,
   rotation,
   previewScale,
+  physicalDotsPerMm,
 }: PrintTextLayerProps) {
+  const textScale = physicalDotsPerMm === undefined ? previewScale : physicalDotsPerMm / (96 / 25.4);
   const layout = solveLabelTextLayout(label, preset);
   const layerStyle: CSSProperties = {
     position: 'absolute',
@@ -32,6 +36,9 @@ export default function PrintTextLayer({
       const lineLayout = layout.lineLayouts?.[line.id];
       const renderedFontSize = lineLayout?.fontSizePt ?? line.style.fontSizePt ?? label.style.fontSizePt;
       return <span className={lineClassName} key={line.id} style={{
+        position: physicalDotsPerMm === undefined ? undefined : 'absolute',
+        display: physicalDotsPerMm === undefined ? undefined : 'block',
+        width: physicalDotsPerMm === undefined ? undefined : 'max-content',
         left: `${line.placement.xPercent}%`,
         top: `${line.placement.yPercent}%`,
         transform: placementTransform(line.placement),
@@ -39,9 +46,9 @@ export default function PrintTextLayer({
         whiteSpace: 'nowrap',
         writingMode: line.textOrientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
         fontFamily: line.style.fontFamily,
-        fontSize: previewScale === undefined
+        fontSize: textScale === undefined
           ? `${renderedFontSize}pt`
-          : `${renderedFontSize * (96 / 72) * previewScale}px`,
+          : `${renderedFontSize * (96 / 72) * textScale}px`,
         fontWeight: line.style.fontWeight,
         fontStyle: line.style.italic ? 'italic' : undefined,
         textDecoration: line.style.underline ? 'underline' : undefined,
@@ -49,7 +56,7 @@ export default function PrintTextLayer({
         label={label}
         line={line}
         lineIndex={lineIndex}
-        previewScale={previewScale}
+        previewScale={textScale}
         fontScale={lineLayout?.fontScale}
       /></span>;
     })}

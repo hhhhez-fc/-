@@ -19,7 +19,8 @@
     "Record Search",
     "Draft History",
     "Record Clipboard",
-    "Shortcut Help"
+    "Shortcut Help",
+    "Direct Printer Bridge"
   ],
   "ownership": {
     "Select/Listbox": "native",
@@ -30,7 +31,8 @@
     "Record Search": "authored",
     "Draft History": "authored",
     "Record Clipboard": "authored",
-    "Shortcut Help": "authored"
+    "Shortcut Help": "authored",
+    "Direct Printer Bridge": "authored"
   },
   "requiredCommands": ["unit", "accessibility", "typecheck", "build"],
   "commands": {
@@ -50,6 +52,7 @@
     "draftHistory": "tests/draft-history.spec.ts",
     "recordClipboard": "tests/workspace-clipboard.spec.ts",
     "shortcutHelp": "tests/shortcut-keys.spec.ts",
+    "directPrinterBridge": "tests/direct-print-dialog.spec.tsx",
     "productivityWorkflow": "tests/app.spec.tsx",
     "excelRegionMerge": "tests/excel-import.spec.ts",
     "shrinkOnlyLayout": "tests/domain.spec.ts",

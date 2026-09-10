@@ -87,7 +87,8 @@ describe('打印页面布局', () => {
     expect((layoutSelect as HTMLSelectElement).value).toBe('portrait');
     expect(screen.getAllByText('输出纸张 45 × 70 mm')).toHaveLength(2);
 
-    await user.click(screen.getByRole('button', { name: '打印这一组' }));
+    await user.click(screen.getByRole('button', { name: '浏览器打印（应急）' }));
+    await user.click(screen.getByRole('button', { name: '仍然打开浏览器打印' }));
 
     const pages = Array.from(document.querySelectorAll<HTMLElement>('.print-page'));
     expect(pages).toHaveLength(3);

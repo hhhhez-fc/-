@@ -1,0 +1,30 @@
+{
+  "protocolVersion": 1,
+  "jobId": "example-xp420b-100x75-job",
+  "createdAtUtc": "2026-09-08T00:00:00.000Z",
+  "websiteVersion": "1.0.0",
+  "printerId": "example-xp420b",
+  "printerName": "XP-420B",
+  "profileId": "xp420b-100x75-203dpi",
+  "printerProfileVersion": "1.0.0",
+  "widthMm": 100,
+  "heightMm": 75,
+  "widthDots": 800,
+  "heightDots": 600,
+  "layout": "landscape",
+  "range": { "from": 1, "to": 2 },
+  "copies": 1,
+  "collate": true,
+  "horizontalOffsetMm": 0,
+  "verticalOffsetMm": 0,
+  "threshold": { "mode": "auto" },
+  "expectedLabels": 2,
+  "assets": [
+    { "assetId": "example-asset-a", "labelId": "EXAMPLE-A", "widthDots": 800, "heightDots": 600, "rotation": 0, "pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlHSj8AAAAASUVORK5CYII=", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    { "assetId": "example-asset-b", "labelId": "EXAMPLE-B", "widthDots": 800, "heightDots": 600, "rotation": 0, "pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlHSj8AAAAASUVORK5CYII=", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }
+  ],
+  "sequence": [
+    { "ordinal": 1, "assetId": "example-asset-a", "labelId": "EXAMPLE-A", "sourcePageNumber": 1, "copyNumber": 1 },
+    { "ordinal": 2, "assetId": "example-asset-b", "labelId": "EXAMPLE-B", "sourcePageNumber": 2, "copyNumber": 1 }
+  ]
+}

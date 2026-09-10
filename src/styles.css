@@ -506,6 +506,30 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
 .button-danger { color: #fff; background: var(--color-danger); border-color: var(--color-danger); }
 .button-danger:hover { background: #84201b; }
 .print-dialog { z-index: var(--z-dialog); width: min(100%,42rem); max-height: min(85vh,46rem); overflow: auto; background: var(--color-paper); border: 2px solid var(--color-ink); box-shadow: 0 18px 48px rgba(0,0,0,.32); }
+.direct-print-dialog { width: min(100%,66rem); }
+.direct-print-live { min-height: 1rem; margin: 0; padding: .55rem 1.15rem; color: var(--color-muted); background: color-mix(in srgb,var(--color-control-surface) 82%,var(--color-success)); border-bottom: 1px solid var(--color-line); font-size: .7rem; }
+.direct-print-content { display: grid; grid-template-columns: minmax(17rem,1fr) minmax(18rem,1fr); gap: 1rem; align-items: start; padding: 1rem 1.15rem; }
+.direct-print-settings, .direct-print-preview { display: grid; gap: .75rem; min-width: 0; }
+.direct-print-settings { padding-right: 1rem; border-right: 1px solid var(--color-line); }
+.direct-print-connection, .direct-print-section, .direct-print-recovery { display: grid; gap: .5rem; padding: .7rem; background: color-mix(in srgb,var(--color-control-surface) 84%,var(--color-canvas)); border: 1px solid var(--color-line); }
+.direct-print-section { margin: 0; }
+.direct-print-section legend { padding: 0 .25rem; font-size: .72rem; font-weight: 700; }
+.direct-print-paper { color: var(--color-ink); font: 700 .9rem Bahnschrift,Consolas,monospace; }
+.direct-print-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
+.direct-print-dialog .field { display: grid; gap: .18rem; color: var(--color-muted); font-size: .66rem; font-weight: 700; }
+.direct-print-dialog input[type="number"], .direct-print-dialog select { width: 100%; min-height: 2rem; padding: .3rem .45rem; color: var(--color-ink); background: var(--color-control-surface); border: 1px solid var(--color-control-border); border-radius: var(--radius-sm); font: inherit; }
+.direct-print-dialog label:not(.field) { display: inline-flex; align-items: center; gap: .35rem; margin-right: .65rem; color: var(--color-ink); font-size: .7rem; }
+.direct-print-hint { color: var(--color-muted); font-size: .66rem; }
+.direct-print-error { margin: 0; color: var(--color-danger); font-size: .68rem; line-height: 1.45; }
+.direct-print-formula { margin: 0; padding: .55rem .65rem; color: var(--color-warning); background: color-mix(in srgb,var(--color-control-surface) 88%,var(--color-warning)); border-left: 3px solid var(--color-warning); font: 700 .7rem Bahnschrift,Consolas,monospace; line-height: 1.45; }
+.direct-print-preview { align-items: center; }
+.direct-print-preview [role="img"] { max-width: 100%; border: 1px solid var(--color-control-border); box-shadow: 0 3px 10px color-mix(in srgb,var(--color-ink) 16%,transparent); }
+.direct-print-rotation { display: flex; align-items: center; justify-content: center; gap: .5rem; color: var(--color-muted); font: 700 .68rem Bahnschrift,Consolas,monospace; }
+.direct-print-preview-nav { display: flex; align-items: center; justify-content: center; gap: .65rem; color: var(--color-muted); font: 700 .68rem Bahnschrift,Consolas,monospace; }
+.direct-print-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .55rem; padding: 1rem 1.15rem; background: color-mix(in srgb,var(--color-control-surface) 78%,var(--color-canvas)); border-top: 1px solid var(--color-line); }
+.direct-print-emergency { display: grid; gap: .5rem; }
+.direct-print-emergency-confirm { display: grid; gap: .5rem; max-width: 25rem; padding: .7rem; background: color-mix(in srgb,var(--color-control-surface) 88%,var(--color-signal)); border-left: 3px solid var(--color-signal); }
+.direct-print-emergency-confirm p { margin: 0; color: var(--color-danger); font-size: .68rem; line-height: 1.45; }
 .shortcut-dialog { z-index: var(--z-dialog); display: grid; grid-template-rows: auto minmax(0,1fr) auto; width: min(100%,34rem); max-height: min(85vh,42rem); overflow: hidden; background: var(--color-paper); border: 2px solid var(--color-ink); box-shadow: 0 18px 48px rgba(0,0,0,.32); }
 .shortcut-dialog-header, .shortcut-dialog-footer { position: sticky; z-index: 1; padding: 1rem 1.15rem; background: #f5f5ef; }
 .shortcut-dialog-header { top: 0; border-bottom: 1px solid var(--color-line); }
@@ -587,6 +611,8 @@ h3 { margin-bottom: .75rem; font-size: .9rem; }
   .print-group-actions { grid-column: 1/-1; grid-template-columns: minmax(0,1fr); align-items: stretch; }
   .print-layout-field { grid-column: 1; }
   .print-label-preview-row { grid-template-columns: minmax(0,1fr); }
+  .direct-print-content { grid-template-columns: minmax(0,1fr); }
+  .direct-print-settings { padding-right: 0; border-right: 0; border-bottom: 1px solid var(--color-line); padding-bottom: 1rem; }
   .shortcut-list > div { grid-template-columns: minmax(0,1fr); gap: .45rem; }
   .shortcut-list dd { justify-content: flex-start; }
 }

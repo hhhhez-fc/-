@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://label-printing-workbench.pages.dev/print-protocol/v1.schema.json",
+  "title": "XP-420B Direct Print Job Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "jobId", "createdAtUtc", "websiteVersion", "printerId", "printerName", "profileId", "printerProfileVersion", "widthMm", "heightMm", "widthDots", "heightDots", "layout", "range", "copies", "collate", "horizontalOffsetMm", "verticalOffsetMm", "threshold", "expectedLabels", "assets", "sequence"],
+  "properties": {
+    "protocolVersion": { "const": 1 },
+    "jobId": { "type": "string", "minLength": 1 },
+    "createdAtUtc": { "type": "string", "format": "date-time" },
+    "websiteVersion": { "type": "string", "minLength": 1 },
+    "printerId": { "type": "string", "minLength": 1 },
+    "printerName": { "type": "string", "minLength": 1 },
+    "profileId": { "const": "xp420b-100x75-203dpi" },
+    "printerProfileVersion": { "type": "string", "minLength": 1 },
+    "widthMm": { "const": 100 },
+    "heightMm": { "const": 75 },
+    "widthDots": { "const": 800 },
+    "heightDots": { "const": 600 },
+    "layout": { "enum": ["landscape", "portrait"] },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "integer", "minimum": 1 },
+        "to": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "copies": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "collate": { "type": "boolean" },
+    "horizontalOffsetMm": { "type": "number", "minimum": -10, "maximum": 10 },
+    "verticalOffsetMm": { "type": "number", "minimum": -10, "maximum": 10 },
+    "threshold": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "text" } } },
+        { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "auto" } } },
+        { "type": "object", "additionalProperties": false, "required": ["mode", "value"], "properties": { "mode": { "const": "custom" }, "value": { "type": "integer", "minimum": 0, "maximum": 255 } } }
+      ]
+    },
+    "expectedLabels": { "type": "integer", "minimum": 1 },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assetId", "labelId", "widthDots", "heightDots", "rotation", "pngBase64", "sha256"],
+        "properties": {
+          "assetId": { "type": "string", "minLength": 1 },
+          "labelId": { "type": "string", "minLength": 1 },
+          "widthDots": { "const": 800 },
+          "heightDots": { "const": 600 },
+          "rotation": { "enum": [0, 90, 180, 270] },
+          "pngBase64": { "type": "string", "minLength": 1, "contentEncoding": "base64" },
+          "sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" }
+        }
+      }
+    },
+    "sequence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ordinal", "assetId", "labelId", "sourcePageNumber", "copyNumber"],
+        "properties": {
+          "ordinal": { "type": "integer", "minimum": 1 },
+          "assetId": { "type": "string", "minLength": 1 },
+          "labelId": { "type": "string", "minLength": 1 },
+          "sourcePageNumber": { "type": "integer", "minimum": 1 },
+          "copyNumber": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}

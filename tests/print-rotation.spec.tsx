@@ -39,6 +39,7 @@ describe('打印文字旋转', () => {
     });
     const plan = createPrintPlan([first, second, image], defaultSizePresets);
     const html = renderToStaticMarkup(<PrintReviewDialog
+      mode="legacy"
       open
       plan={plan}
       rotations={{ [first.id]: 90 }}
@@ -93,6 +94,7 @@ describe('打印文字旋转', () => {
     const plan = createPrintPlan([label], defaultSizePresets);
     expect(plan.blockers).toEqual([]);
     const html = renderToStaticMarkup(<PrintReviewDialog
+      mode="legacy"
       open
       plan={plan}
       rotations={{ [label.id]: 90 }}
@@ -120,6 +122,7 @@ describe('打印文字旋转', () => {
     });
     const plan = createPrintPlan([small, large], defaultSizePresets);
     const html = renderToStaticMarkup(<PrintReviewDialog
+      mode="legacy"
       open
       plan={plan}
       rotations={{}}

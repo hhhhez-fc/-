@@ -3,9 +3,14 @@
 node_modules/
 dist/
 .pnpm-store/
+/.dotnet-cli-task4/
 coverage/
 *.log
 *.tsbuildinfo
+
+print-helper/**/bin/
+print-helper/**/obj/
+/artifacts/
 
 .env
 .env.*

@@ -1,7 +1,7 @@
 {
   "findings": [],
   "mode": "strict",
-  "projectRoot": "D:\\Codex\\唛头打印",
+  "projectRoot": "D:\\Codex\\唛头打印\\.worktrees\\deploy-browser-comments",
   "schemaVersion": 1,
   "summary": {
     "errors": 0,
