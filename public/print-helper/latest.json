@@ -5,7 +5,7 @@
   "platform": "windows-x64",
   "fileName": "LabelPrintHelper-Setup.exe",
   "downloadUrl": "https://github.com/hhhhez-fc/-/releases/download/print-helper-v0.1.0/LabelPrintHelper-Setup.exe",
-  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "sha256": "b20f9742eddd9dffe1e264117ba22836f998f93acac508f9e118a28f50ab587c",
   "releaseNotesUrl": "https://github.com/hhhhez-fc/-/releases/tag/print-helper-v0.1.0",
-  "publishedAtUtc": "2026-09-10T00:00:00.000Z"
+  "publishedAtUtc": "2026-09-10T11:56:46.000Z"
 }
